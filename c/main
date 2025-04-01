@@ -2167,26 +2167,42 @@ int stringchanged_event(int event_code, ToolboxEvent *event, IdBlock *id_block,v
 {
   int month;
   stringset_get_selected(1,id_block->self_id,id_block->self_component,&month);
-  numberrange_set_bounds(2,id_block->self_id,id_block->self_component+2,0,daysinmonth[month+1],0,0);
+  numberrange_set_bounds(NumberRange_UpperBound,id_block->self_id,id_block->self_component+2,
+                         0,days_in_month[month+1],0,0);
   return 1;
 }
 
-//This code sets the date in the window to today
-int settocurrentdate(ObjectId window,ComponentId day,ComponentId month,ComponentId year)
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+/* Sets the date in the specified window and gadgets to today. */
+
+int set_to_current_date(ObjectId window, ComponentId day, ComponentId month, ComponentId year)
 {
-  int UTC[2],ordinals[10];
+  oswordreadclock_utc_block time;
+  territory_ordinals        ordinals;
 
-  //Read time
-  UTC[0]=3;
-  _swi(OS_Word,_IN(0)|_IN(1),14,UTC);
-  _swi(Territory_ConvertTimeToOrdinals,_IN(0)|_IN(1)|_IN(2),-1,UTC,ordinals);
 
-  //Now setup the window
-  stringset_set_selected(0,window,month,monthnames[ordinals[5]]);
-  numberrange_set_value(0,window,day,ordinals[4]);
-  if (year>0) {numberrange_set_value(0,window,year,ordinals[6]);}
-  return 1;
+  /* Read the current time from the system clock. */
+
+  time.op = oswordreadclock_OP_UTC;
+  oswordreadclock_utc (&time);
+  territory_convert_time_to_ordinals (territory_CURRENT, (const os_date_and_time *) &(time.utc), &ordinals);
+
+  /* Use the data to set up the window. */
+
+  stringset_set_selected(0, window, month, monthnames[ordinals.month]);
+  numberrange_set_bounds(NumberRange_UpperBound, window, day, 0, days_in_month[ordinals.month], 0, 0);
+  numberrange_set_value(0, window, day, ordinals.date);
+  if (year > 0)
+  {
+    numberrange_set_value(0, window, year, ordinals.year);
+  }
+
+  return (1);
 }
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 
 //This code scans a file
 int scanfile(int filenum)
@@ -4000,23 +4016,13 @@ int main(int argc,char *argv[])
       Toolbox_ObjectAutoCreated,
       0};
 
-    int  event_code,loop,len;
-//    int UTC[2];
-//    char debug_filename[100];
+    int  event_code,i;
     char string[8];
 
-//    UTC[0]=3;
-//    _swi(OS_Word,_IN(0)|_IN(1),14,UTC);
-//    _swi(Territory_ConvertDateAndTime,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4),-1,UTC,debug_filename,100,"RAM::RamDisc0.$.%24%MI%SE%CS");
-//    debug=fopen(debug_filename,"w");
-//    if (debug==NULL) {
-//      printf("Could not open debug file");
-//      exit(0);
-//    }
 
+    /* Copy data path into block so it cannot be corrupted by other copies of Today. */
 
-    //Copy data path into block so it cannot be corrupted by other copies
-    len=_swi(OS_ReadVarVal,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_RETURN(2),"Today$Dir",todaypaths[0],256,0,0);
+    os_read_var_val ("Today$Dir", todaypaths[0], TODAY_PATH_LEN, 0, os_VARTYPE_STRING, NULL, NULL);
 
     /* Initialise the flex library. */
 
@@ -4066,10 +4072,12 @@ int main(int argc,char *argv[])
     event_register_message_handler(Wimp_MModeChange,modechange_message,0);
     event_register_message_handler(Wimp_MQuit,quit_message,0);
 
-    //Load all of the month names from messages file
-    for (loop=0;loop<=12;loop++) {
-      sprintf(string,"m%d",loop);
-      _swi(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages,string,monthnames[loop],4);
+    /* Load all of the month names from messages file. */
+
+    for (i = 0; i <= 12; i++)
+    {
+      sprintf(string, "m%d", i);
+      msgs_lookup (string, monthnames[i], 4);
     }
 
     //Load all of the event names from messages file
