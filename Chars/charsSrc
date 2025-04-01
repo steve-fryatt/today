@@ -9,7 +9,7 @@ int main(void)
   FILE *fileptr;
   int c;
 
-  fileptr=fopen("RAM::RamDisc0.$.Chars","w");
+  fileptr=fopen("MEM::Memphis.$.Chars","w");
   if (fileptr==NULL) {
     printf("Error\n");
     exit(1);
