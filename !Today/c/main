@@ -50,6 +50,8 @@ typedef struct {
   char str[32];
 } STRING;
 
+#include "main.h"
+
 #define WimpVersion    310
 #define recordstep 50
 #define recordlimit 500
@@ -83,7 +85,7 @@ ComponentId iconbar_component;
 int yearwidth,yeartextwidth,monthwidth,daywidth,daytextwidth,typewidth;
 int windowwidth,highlightstate=0;
 int ignoretypes,ignoreyears;
-char todaypath[256];
+char todaypaths[2][256];
 
 int scanday,scanmonth,scandayofweek;
 
@@ -94,6 +96,8 @@ char srchstring[64];
 WIN_DATA *sortwin[2];
 
 int numofwords[2],wordptrs[2][maxwordsinstring];
+
+int tempcount1,tempcount2,tempcount3;
 
 //Lookup table of chars so punctuation is ignored and accents are removed
 const char lookup[256]={
@@ -170,77 +174,87 @@ int movetoendofword(char *string,int offset)
   return offset;
 }
 
-//Check if string1 starts with string2, returns 0 is it does not
-int checkwordmatch(char *string1,char *string2)
+//Routine to test words at start of strings are same, if verbcheck is non-zero
+//and words do not match it checks to see if the endings are in the verb list
+//The term chars are th upper limits on the characters that cause termination
+//setting to 32 means the strings do not terminate on spaces
+int comparewords(char *str1,char *str2,int verbcheck,int termchar1,int termchar2)
 {
-  int offset=0,char1,char2;
+  int offset=0,c1,c2;
+  tempcount2++;
   do {
-    char1=lookup[string1[offset]];
-    char2=lookup[string2[offset++]];
-    //If char2 not terminator and char1 not equal char2 strings not same
-    if (char2>=32 && char1!=char2) {return 0;}
-  } while (char2>=32);
-  //If string2 has finished, it is only a match if char1 is a word terminator
-  //ie char1 is a punctuation character, control character or a space
-  if (char1>32) {return 0;}
-  return 1;
+    c1=lookup[str1[offset]];
+    c2=lookup[str2[offset++]];
+    //Check to see if both words have finished (and are equal)
+    if (c1<=termchar1 && c2<=termchar2) {return 0;}
+  } while (c1==c2);
+
+  //Check if verb check is to be done
+  //Do not do a verb check if at a space and not terminating on spaces
+  if (verbcheck!=0 && (c1!=' ' || termchar1==32) && (c2!=' ' || termchar2==32)) {
+    //If not at the end of each word, see if remaining bit is in list of verb endings
+    if ((c1<=32 || findwordinlist(str1+offset-1,2,0)>=0) && (c2<=32 || findwordinlist(str2+offset-1,2,0)>=0)) {return 0;}
+  }
+
+  //Check if word1 is greater
+  if (c1>c2) {return 2;}
+  //Check if word2 is greater
+  if (c2>c1) {return -2;}
+  return 0;
 }
 
 //Routine to find a word in a list of words (return index or -1 if not present)
-int findwordinlist(char *string,int num)
+int findwordinlist(char *string,int num,int verbcheck)
 {
-  int first,last,oldlast,result=-1,char1,char2,offset=0;
+  int checkpos,firstpos,lastpos;
+  tempcount1++;
 
-  first=0;
-  last=wordlistlen[num];
+  //Set limits of possible positions
+  firstpos=0;
+  lastpos=wordlistlen[num];
+  //Keep checking as long as there is a possible range
+  while (firstpos<lastpos) {
+    //Do a binary chop so check the position in middle of range
+    checkpos=(firstpos+lastpos)/2;
+    //Compare required result to check position
+    switch (comparewords(string,wordlist[num][checkpos].str,verbcheck,32,31)) {
+      case -2:
+        //String < Check position so any match must be before checkpos
+        lastpos=checkpos;
+        break;
+      case  0:
+        //String matches, but check following items in case there are several
+        //that match (eg United States and United States Of America)
+        while (checkpos+1<lastpos && comparewords(string,wordlist[num][checkpos+1].str,verbcheck,32,31)==0) {checkpos++;}
+        return checkpos;
+        break;
+      case  2:
+        //String > Check position so any match must be after checkpos
+        firstpos=checkpos+1;
+        break;
+    }
+  }
+  return -1;
+}
 
-  do {
-    //Load the next character
-    char1=lookup[string[offset]];
-    char2=lookup[wordlist[num][first].str[offset]];
+//Routine to test words at start of strings are same, if verbcheck is non-zero and words do not match it checks to see
+//if the endings are in the verb list
+int comparewordswiththesaurus(char *str1,char *str2)
+{
+  int pos1,pos2;
+  if (comparewords(str1,str2,1,32,32)==0) {return 0;}
 
-    if (char1<=32) {
-      //Char1 is a terminator so look for terminated strings
-      if (char2<32) {
-        //First string has terminated so this is a possible answer
-        result=first++;
-        char2=wordlist[num][first].str[offset];
+  //Check if the first word is in the thesaurus
+  pos1=findwordinlist(str1,3,1);
+  if (pos1>=0) {
+    //Run through all the words equivalent to pos1 and see if they match str2
+    for (pos2=0;pos2<wordlistlen[3];pos2++) {
+      if (thesaurustable[pos1*wordlistlen[3]+pos2]!=0) {
+        if (comparewords(str2,wordlist[3][pos2].str,1,32,31)==0) {return 0;}
       }
     }
-
-    //First look for the first string where the next character is>=char1
-    while (char2<char1) {
-      first++;
-      if (first<last) {
-        char2=wordlist[num][first].str[offset];
-      }
-      else
-      {
-        char2=1000;
-      }
-    };
-
-    //If char2 is > char1 then string is not in the word list
-    if (char2>char1) {return result;}
-
-    //Now find the upper limit of words which match
-    oldlast=last;
-    last=first;
-    do {
-      last++;
-      if (last<oldlast) {
-        char2=wordlist[num][last].str[offset];
-      }
-      else
-      {
-        char2=1000;
-      }
-    } while (char2==char1);
-
-    //Move to next character
-    offset++;
-  } while (1);
-  return -1;
+  }
+  return 2;
 }
 
 //Parse string by removing hard spaces, doubles/leading/trailing spaces
@@ -329,7 +343,7 @@ int parsestring(char *string)
     offset1=movetonextword(string,offset1);
     if (string[offset1]>=32) {
       //Have not reached the end of the string so check the word for a match
-      loop=findwordinlist(string+offset1,0);
+      loop=findwordinlist(string+offset1,0,0);
       if (loop!=-1) {
 
         fprintf(debug,"Replacing: '%s' in '%s'\n",wordlist[0][loop].str,string);
@@ -519,7 +533,8 @@ int cleartext_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void 
 //Make sure there is room for data
 //Stops when it reaches the maximum, but if maximum is -ve it doesn't
 //report an error message
-int makeroomfordata(WIN_DATA *window,int maximum) {
+int makeroomfordata(WIN_DATA *window,int maximum)
+{
   if (window->records==abs(maximum)) {
     if (maximum>=0) {reporterror("e2",0);}
     return NULL;
@@ -761,7 +776,6 @@ int loadheader(FILE *fileptr,REC_DATA *record,int listnum)
   return 1;
 }
 
-
 //This code adds a record to the list of records for a window
 int addeventtolist(WIN_DATA *window)
 {
@@ -774,32 +788,27 @@ int addeventtolist(WIN_DATA *window)
 
 //This code loads the next record from the file
 //Returns -ve if no record and 0 if an error
-int loadnextrecord(FILE *fileptr,WIN_DATA *window,int filenum,int maximum,int listnum)
+int loadnextrecord(FILE *fileptr,WIN_DATA *window,int filenum,int maximum,int listnum,int tempfile)
 {
   int nextchar,offset,continuation;
   REC_DATA *record,record2;
 
   if (makeroomfordata(window,maximum)==NULL) {return NULL;}
 
-  //If filenum<0, Keep looping until an event is found in the correct month
-  //bit stop if the month is silly (this stops it losing data due to errors)
-  do {
-    //Move to start of line and leave if nothing left in file
-    if (movetonextline(fileptr)==0) {return -1;}
-  
-    //Load and process the header
-    record=&window->recorddata[window->records];
-    if (loadheader(fileptr,record,listnum)==0) {return -1;}
-  
-    //Load the string
-    record->textoff=offset=window->curoff;
-    do {
-      nextchar=fgetc(fileptr);
-      if (nextchar!=EOF && nextchar>=32) {window->text[offset++]=nextchar;}
-    } while (nextchar!=EOF && nextchar>=32);
-    window->text[offset++]=0;
+  //Move to start of line and leave if nothing left in file
+  if (movetonextline(fileptr)==0) {return -1;}
 
-  } while (filenum<0 && record->month!=-filenum && record->month>=1 && record->month<=12);
+  //Load and process the header
+  record=&window->recorddata[window->records];
+  if (loadheader(fileptr,record,listnum)==0) {return -1;}
+
+  //Load the string
+  record->textoff=offset=window->curoff;
+  do {
+    nextchar=fgetc(fileptr);
+    if (nextchar!=EOF && nextchar>=32) {window->text[offset++]=nextchar;}
+  } while (nextchar!=EOF && nextchar>=32);
+  window->text[offset++]=0;
 
   //Check for any continuations
   do {
@@ -827,7 +836,8 @@ int loadnextrecord(FILE *fileptr,WIN_DATA *window,int filenum,int maximum,int li
       }
     }
   } while (continuation==1);
-  parsestring(window->text+record->textoff);
+  //Only parse the string if it was not loaded from a temporary file
+  if (tempfile==0) {parsestring(window->text+record->textoff);}
 
   //Check that the events have years and reminders do not
   if (record->type==1 && record->year==unknown_year) {record->type=2;}
@@ -838,55 +848,49 @@ int loadnextrecord(FILE *fileptr,WIN_DATA *window,int filenum,int maximum,int li
   return 1;
 }
 
-//Loads all events from file filenum, but if filenum is -ve it loads all
-//events (from all the month files) in the month -filenum
-int loadallevents(WIN_DATA *joindata,char *path,int filenum,int listnum)
+//Loads all events from file filenum
+//If tempfile is non-zero it loads from the tempfile
+int loadallevents(WIN_DATA *joindata,char *path,int filenum,int tempfile,int listnum)
 {
   char filename[256];
   FILE *fileptr;
-  int recresult,filenum2,startnum,endnum;
+  int recresult;
 
-  if (filenum<0) {
-    startnum=-12;
-    endnum=-1;
+  if (tempfile!=0) {
+    sprintf(filename,"%s.TodayData._%s",path,monthfiles[filenum]);
   }
   else
   {
-    startnum=endnum=filenum;
+    sprintf(filename,"%s.TodayData.%s",path,monthfiles[filenum]);
   }
+  fileptr=fopen(filename,"rb");
+  if (fileptr==NULL) {return reporterror("e4",filename);}
 
-  //Loop through all of the month files if filenum is <0
-  for (filenum2=startnum;filenum2<=endnum;filenum2++) {
-    sprintf(filename,"%s.TodayData.%s",path,monthfiles[abs(filenum2)]);
-    fileptr=fopen(filename,"rb");
-    if (fileptr==NULL) {return reporterror("e4",filename);}
-  
-    //Now cycle through loading records
-    do {
-      recresult=loadnextrecord(fileptr,joindata,filenum,0x7fffffff,listnum);
-      if (recresult==0) {
-        fclose(fileptr);
-        return 0;
-      }
-      if (recresult>0) {addeventtolist(joindata);}
-    } while (recresult>0);
-    fclose(fileptr);
-  }
+  //Now cycle through loading records
+  do {
+    recresult=loadnextrecord(fileptr,joindata,filenum,0x7fffffff,listnum,tempfile);
+    if (recresult==0) {
+      fclose(fileptr);
+      return 0;
+    }
+    if (recresult>0) {addeventtolist(joindata);}
+  } while (recresult>0);
+  fclose(fileptr);
   return 1;
 }
 
 //Save all events to a file
-int saveallevents(WIN_DATA *joindata,char *path,int filenum)
+int saveallevents(WIN_DATA *joindata,char *path,int filenum,int tempfile)
 {
   char filename[256];
   int loop,loop2;
   FILE *fileptr;
 
 
-  //Store to tempfile if filenum is less than 0, this is so that
+  //Check if storing to tempfile, this is so that
   //when sorting data can be moved from one month file to another
-  if (filenum<0) {
-    sprintf(filename,"%s.TodayData._%s",path,monthfiles[-filenum]);
+  if (tempfile!=0) {
+    sprintf(filename,"%s.TodayData._%s",path,monthfiles[filenum]);
   }
   else
   {
@@ -917,48 +921,6 @@ int saveallevents(WIN_DATA *joindata,char *path,int filenum)
   fclose(fileptr);
   return 1;
 }
-
-//Routine to test words at start of strings are same, if verbcheck is non-zero and words do not match it checks to see
-//if the endings are in the verb list
-int comparewords(char *str1,char *str2,int verbcheck)
-{
-  int offset=0,c1,c2;
-  do {
-    c1=lookup[str1[offset]];
-    c2=lookup[str2[offset++]];
-    //Check to see if both words have finished (and are equal)
-    if (c1<=32 && c2<=32) {return 0;}
-  } while (c1==c2);
-
-  //Check if verb check is to be done
-  if (verbcheck!=0) {
-    //If not at the end of each word, see if remaining bit is in list of verb endings
-    if ((c1<=32 || findwordinlist(str1+offset-1,2)>=0) && (c2<=32 || findwordinlist(str2+offset-1,2)>=0)) {return 0;}
-  }
-
-  //Check if word1 is greater
-  if (c1>c2) {return 2;}
-  //Check if word2 is greater
-  if (c2>c1) {return -2;}
-  return 0;
-}
-
-//Routine to test words at start of strings are same, if verbcheck is non-zero and words do not match it checks to see
-//if the endings are in the verb list
-int comparewordswiththesaurus(char *str1,char *str2)
-{
-  int pos1,pos2;
-  if (comparewords(str1,str2,1)==0) {return 0;}
-
-  //Check if the words are in the thesaurus
-  pos1=findwordinlist(str1,3);
-  pos2=findwordinlist(str2,3);
-  if (pos1>=0 && pos2>=0) {
-    if (thesaurustable[pos1*wordlistlen[3]+pos2]!=0) {return 0;}
-  }
-  return 2;
-}
-
 
 //Routine to read the next upper case letter from the string
 //If a terminator is reached 0 is returned
@@ -1046,7 +1008,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
               if (offset1<0) {
                 if (offset2<0) {
                   //Both letters were the start of words so compare the strings
-                  if (comparewords(sortwin[0]->text+records[0]->textoff+wordptrs[0][wordnum1]-offset1,sortwin[1]->text+records[1]->textoff+wordptrs[1][wordnum2]-offset2,0)==0) {
+                  if (comparewords(sortwin[0]->text+records[0]->textoff+wordptrs[0][wordnum1]-offset1,sortwin[1]->text+records[1]->textoff+wordptrs[1][wordnum2]-offset2,0,32,32)==0) {
                     //Build the new name to replace the old initials
                     if (matchedinitialtoname!=0) {
                       newoffset=0;
@@ -1160,7 +1122,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
     for (loop2=0;loop2<oldcount;loop2++) {
       if (wordptrs[loop][loop2]>=0) {
         //Word has not been removed by initial checking
-        index=findwordinlist(sortwin[loop]->text+records[loop]->textoff+wordptrs[loop][loop2],1);
+        index=findwordinlist(sortwin[loop]->text+records[loop]->textoff+wordptrs[loop][loop2],1,0);
         //Only keep word in the list if it is not to be ignored
         if (index==-1) {wordptrs[loop][numofwords[loop]++]=wordptrs[loop][loop2];}
       }
@@ -1191,7 +1153,7 @@ int checkforcommonword(REC_DATA *r1,REC_DATA *r2)
 }
 
 //Save all events to a file (but in possible duplicate states)
-int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum)
+int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum,int tempfile)
 {
   char filename[256];
   int loop2,loop3,firstevent;
@@ -1202,10 +1164,10 @@ int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum)
   if (flex_alloc((flex_ptr)&storedtable,joindata->records*sizeof(char))==0) {return reporterror("e1",0);}
   for(loop2=0;loop2<joindata->records;loop2++) {storedtable[loop2]=0;}
 
-  //Store to tempfile if filenum is less than 0, this is so that
+  //Check if storing to tempfile, this is so that
   //when sorting data can be moved from one month file to another
-  if (filenum<0) {
-    sprintf(filename,"%s.TodayData._%s",path,monthfiles[-filenum]);
+  if (tempfile!=0) {
+    sprintf(filename,"%s.TodayData._%s",path,monthfiles[filenum]);
   }
   else
   {
@@ -1282,6 +1244,7 @@ int comparestrings(REC_DATA *r1,REC_DATA *r2)
   for (pos1=0;pos1<numofwords[0];pos1++) {
     for (pos2=0;pos2<numofwords[1];pos2++) {
       if (wordptrs[1][pos2]>=0) {
+        tempcount3++;
         if (comparewordswiththesaurus(sortwin[0]->text+r1->textoff+wordptrs[0][pos1],sortwin[1]->text+r2->textoff+wordptrs[1][pos2])==0) {
           found++;
           wordptrs[1][pos2]=-1;
@@ -1629,7 +1592,7 @@ int editevent(WIN_DATA *win,int flags)
       //Save to own file
       curfile=0;
     }
-    if (loadallevents(win,todaypath,curfile,0)==0) {
+    if (loadallevents(win,todaypaths[0],curfile,0,0)==0) {
       //Error so lose all data
       if (win->text!=NULL) {flex_free((flex_ptr)&win->text);}
       if (win->recorddata!=NULL) {flex_free((flex_ptr)&win->recorddata);}
@@ -1669,11 +1632,11 @@ int editevent(WIN_DATA *win,int flags)
       nextfile=0;
     }
     if (curfile!=nextfile) {
-      if (curfile!=-1) {saveallevents(win,todaypath,curfile);}
+      if (curfile!=-1) {saveallevents(win,todaypaths[0],curfile,0);}
       curfile=nextfile;
       win->records=win->maxrecords=0;
       win->curoff=win->maxoff=0;
-      if (loadallevents(win,todaypath,curfile,0)==0) {
+      if (loadallevents(win,todaypaths[0],curfile,0,0)==0) {
         //Error so lose all data
         if (win->text!=NULL) {flex_free((flex_ptr)&win->text);}
         if (win->recorddata!=NULL) {flex_free((flex_ptr)&win->recorddata);}
@@ -1743,7 +1706,7 @@ int editevent(WIN_DATA *win,int flags)
   }
 
   //Save the final output file and clear memory
-  if (curfile!=-1) {saveallevents(win,todaypath,curfile);}
+  if (curfile!=-1) {saveallevents(win,todaypaths[0],curfile,0);}
   if (win->text!=NULL) {flex_free((flex_ptr)&win->text);}
   if (win->recorddata!=NULL) {flex_free((flex_ptr)&win->recorddata);}
 
@@ -1904,13 +1867,13 @@ int scanfile(int filenum)
   int recresult;
   
   //Open the file
-  sprintf(filename,"%s.TodayData.%s",todaypath,monthfiles[filenum]);
+  sprintf(filename,"%s.TodayData.%s",todaypaths[0],monthfiles[filenum]);
   fileptr=fopen(filename,"rb");
   if (fileptr==NULL) {return reporterror("e4",filename);}
 
   //Now cycle through loading records
   do {
-    recresult=loadnextrecord(fileptr,&scanwin,filenum,recordlimit,0);
+    recresult=loadnextrecord(fileptr,&scanwin,filenum,recordlimit,0,0);
     if (recresult==0) {
       fclose(fileptr);
       return 0;
@@ -2093,7 +2056,7 @@ int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
 
   //Run through all files searching in them
   for (loop=0;loop<=12 && searchresult!=0;loop++) {
-    sprintf(filename,"%s.TodayData.%s",todaypath,monthfiles[loop]);
+    sprintf(filename,"%s.TodayData.%s",todaypaths[0],monthfiles[loop]);
     fileptr=fopen(filename,"rb");
     if (fileptr==NULL) {
       reporterror("e4",filename);
@@ -2101,7 +2064,7 @@ int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
     }
     recresult=1;
     while (searchresult!=0 && recresult>0) {
-      recresult=loadnextrecord(fileptr,&srchwin,loop,recordlimit,0);
+      recresult=loadnextrecord(fileptr,&srchwin,loop,recordlimit,0,0);
       if (recresult==0) {searchresult=0;}
       if (recresult>0) {
         //Check if event type is in search mask
@@ -2453,31 +2416,34 @@ int setuptypemenus(int oldnumoftypes)
 int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
   int loadedevents=0,savedevents=0,filenum,loop,loop2,loop3,len,result,listnum;
-  int listnum2,namesmatch,oldnumoftypes,letter,state,selected,time;
-  char text1[8],text2[8],text3[8],newpath[256];
+  int listnum2,namesmatch,oldnumoftypes,letter,state,selected,time,recresult,pathnum;
+  int curtempfile,nexttempfile;
+  char text1[8],text2[8],text3[8];
   char filepath[256],filepath2[256],messline[256];
   _kernel_oserror error,*error2;
   WIN_DATA joindata;
   MessagesFD newmess;
-  FILE *fileptr,*fileptr2;
+  FILE *fileptr,*fileptr2,*tempfileptr;
 
   _swi(Hourglass_On,0);
   joindata.maxrecords=0;
   joindata.recorddata=NULL;
   joindata.text=NULL;
   joindata.maxoff=0;
+  joindata.curoff=joindata.records=0;
   oldnumoftypes=lenofeventlists[0];
 
   //Set mapping buffer for first set of files to load
   loadeventlist(&messages,1);
 
+  todaypaths[1][0]=0;
   if (event->hdr.event_code==9) {
-    displayfield_get_value(0,joinwindow,4,newpath,256,&len);
+    displayfield_get_value(0,joinwindow,4,todaypaths[1],256,&len);
 
     //Build the new event type list by loading the lists into two buffers
-    sprintf(newpath+len-1,".Messages");
-    error2=_swix(MessageTrans_OpenFile,_IN(0)|_IN(1)|_IN(2),&newmess,newpath,0);
-    newpath[len-1]=0;
+    sprintf(todaypaths[1]+len-1,".Messages");
+    error2=_swix(MessageTrans_OpenFile,_IN(0)|_IN(1)|_IN(2),&newmess,todaypaths[1],0);
+    todaypaths[1][len-1]=0;
     if (error2==NULL) {
       loadeventlist(&newmess,2);
       _swi(MessageTrans_CloseFile,_IN(0),&newmess);
@@ -2493,7 +2459,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
       for (loop=0;loop<lenofeventlists[listnum];loop++) {
         //Find position of the event in the combined list
         for (loop2=0;loop2<lenofeventlists[0] && caseinsencmp(eventlists[listnum][loop].str+2,eventlists[0][loop2].str+2)==0;loop2++) {}
-        //Don't allow too many events, set to unknown all letters used
+        //Do not allow too many events, set to unknown all letters used
         if (loop2==lenofeventlists[0] && lenofeventlists[0]==maxeventlen) {
           loop2=0;
         }
@@ -2553,9 +2519,74 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
   }
 
   time=_swi(OS_ReadMonotonicTime,_RETURN(0));
+  tempcount1=0;
+  tempcount2=0;
+  tempcount3=0;
+
+  //Shuffle events from the files for todaypaths[0] and todaypaths[1] 
+  //into the correct temporary files
+  //First create the empty temporary files
+  for (filenum=0;filenum<=12;filenum++) {
+    sprintf(filepath,"%s.TodayData._%s",todaypaths[0],monthfiles[filenum]);
+    tempfileptr=fopen(filepath,"w");
+    fclose(tempfileptr);
+  }
+  //Now set the current temp file to the own file and open to apend
+  //(this is because only 12 files can be open at once)
+  curtempfile=0;
+  sprintf(filepath,"%s.TodayData._%s",todaypaths[0],monthfiles[0]);
+  tempfileptr=fopen(filepath,"a");
+
+  for (filenum=0;filenum<=12;filenum++) {
+    for (pathnum=0;pathnum<2;pathnum++) {
+      if (todaypaths[pathnum][0]>=32) {
+        sprintf(filepath,"%s.TodayData.%s",todaypaths[pathnum],monthfiles[filenum]);
+        fileptr=fopen(filepath,"rb");
+  
+        do {
+          recresult=loadnextrecord(fileptr,&joindata,filenum,0x7fffffff,pathnum+1,0);
+          if (recresult==0) {
+            fclose(fileptr);
+            fclose(tempfileptr);
+            if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
+            if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
+            //Restore the event type list
+            loadeventlist(&messages,0);
+            return 1;
+          }
+          if (recresult>0) {
+            //Want to save the file to the temp files
+            if (filenum==0 || joindata.recorddata[0].month<1 || joindata.recorddata[0].month>12) {
+              //Record is from the own file or is in a silly month, so save to same filenum as it was loaded from
+              nexttempfile=filenum;
+            }
+            else
+            {
+              //Save the record to the correct temporary month file
+              nexttempfile=joindata.recorddata[0].month;
+            }
+            //Check if the temp file is already open
+            if (nexttempfile!=curtempfile) {
+              fclose(tempfileptr);
+              curtempfile=nexttempfile;
+              sprintf(filepath,"%s.TodayData._%s",todaypaths[0],monthfiles[curtempfile]);
+              tempfileptr=fopen(filepath,"a");
+            }
+            //Now save the record to the temp file
+            saverecord(tempfileptr,&joindata.recorddata[0],&joindata);
+          }
+        } while (recresult>0);
+        fclose(fileptr);
+      }
+    }
+    _swi(Hourglass_Percentage,_IN(0),((filenum+1)*50/13));
+  }
+  fclose(tempfileptr);
+
+  //Now sort the temporary files and remove duplicates
   for (filenum=0;filenum<=12;filenum++) {
     joindata.curoff=joindata.records=0;
-    if (loadallevents(&joindata,todaypath,-filenum,1)==0 || (event->hdr.event_code==9 && loadallevents(&joindata,newpath,-filenum,2)==0)) {
+    if (loadallevents(&joindata,todaypaths[0],filenum,1,0)==0) {
       //Error so lose all data
       if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
       if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
@@ -2620,7 +2651,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
       ignoretypes=ignoreyears=0;
       qsort((void *)joindata.recorddata,(size_t)joindata.records,sizeof(REC_DATA),joincompare);
       //Save data
-      if (saveallevents(&joindata,todaypath,-filenum)==NULL) {
+      if (saveallevents(&joindata,todaypaths[0],filenum,1)==NULL) {
         if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
         if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
         //Restore the event type list
@@ -2635,7 +2666,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
       ignoreyears=0;
       qsort((void *)joindata.recorddata,(size_t)joindata.records,sizeof(REC_DATA),joincompare);
       //Save data
-      if (savealleventsinduporder(&joindata,todaypath,-filenum)==NULL) {
+      if (savealleventsinduporder(&joindata,todaypaths[0],filenum,1)==NULL) {
         if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
         if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
         //Restore the event type list
@@ -2644,9 +2675,9 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
       }
     }
     savedevents+=joindata.records;
-    _swi(Hourglass_Percentage,_IN(0),(filenum+1)*100/13);
+    _swi(Hourglass_Percentage,_IN(0),50+((filenum+1)*50/13));
   }
-  fprintf(debug,"Time=%d\n",_swi(OS_ReadMonotonicTime,_RETURN(0))-time);
+  fprintf(debug,"Time=%d\nCount1=%d\nCount2=%d\nCount3=%d\n",_swi(OS_ReadMonotonicTime,_RETURN(0))-time,tempcount1,tempcount2,tempcount3);
 
   if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
   if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
@@ -2659,7 +2690,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
 
   //Close messages file before editing it
   _swi(MessageTrans_CloseFile,_IN(0),&messages);
-  sprintf(filepath,"%s.Messages",todaypath);
+  sprintf(filepath,"%s.Messages",todaypaths[0]);
   fileptr=fopen(filepath,"r");
   if (fileptr==NULL) {
     if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
@@ -2669,7 +2700,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
     loadeventlist(&messages,0);
     return reporterror("e4",filepath);
   }
-  sprintf(filepath2,"%s._Messages",todaypath);
+  sprintf(filepath2,"%s._Messages",todaypaths[0]);
   fileptr2=fopen(filepath2,"w");
   if (fileptr2==NULL) {
     if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
@@ -2710,11 +2741,9 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
   _swix(MessageTrans_OpenFile,_IN(0)|_IN(1)|_IN(2),&messages,filepath,0);
 
   //Now run through renaming the new month files
-  //Own does not need to be done as there was no movement from the month files
-  //to the own file
-  for (filenum=1;filenum<=12;filenum++) {
-    sprintf(filepath,"%s.TodayData.%s",todaypath,monthfiles[filenum]);
-    sprintf(filepath2,"%s.TodayData._%s",todaypath,monthfiles[filenum]);
+  for (filenum=0;filenum<=12;filenum++) {
+    sprintf(filepath,"%s.TodayData.%s",todaypaths[0],monthfiles[filenum]);
+    sprintf(filepath2,"%s.TodayData._%s",todaypaths[0],monthfiles[filenum]);
     _swix(OS_FSControl,_IN(0)|_IN(1)|_IN(3),27,filepath,1);
     _swix(OS_FSControl,_IN(0)|_IN(1)|_IN(2),25,filepath2,filepath);
   }
@@ -3006,11 +3035,11 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
         break;
       case 0x24:
         //Open an edit window for the own and month files
-        sprintf(filename,"Filer_Run %s.TodayData.%s",todaypath,monthfiles[0]);
+        sprintf(filename,"Filer_Run %s.TodayData.%s",todaypaths[0],monthfiles[0]);
         _swi(Wimp_StartTask,_IN(0),filename);
         stringset_get_selected(1,scanwin.toolbar,1,&month);
         month++;
-        sprintf(filename,"Filer_Run %s.TodayData.%s",todaypath,monthfiles[month]);
+        sprintf(filename,"Filer_Run %s.TodayData.%s",todaypaths[0],monthfiles[month]);
         _swi(Wimp_StartTask,_IN(0),filename);
     }
   }
@@ -3207,7 +3236,7 @@ int setupwindows(void)
 
   //Load options
   toolbox_create_object(0,"MainMenu",&mainmenu);
-  sprintf(path,"%s.Options",todaypath);
+  sprintf(path,"%s.Options",todaypaths[0]);
   optfile=fopen(path,"r");
   while(feof(optfile)==0) {
     if (fscanf(optfile,"%s",opttext)!=EOF) {
@@ -3251,7 +3280,7 @@ int saveoptions_event(int event_code, ToolboxEvent *event, IdBlock *id_block,voi
   int state,on;
   char path[256];
   FILE *optfile;
-  sprintf(path,"%s.Options",todaypath);
+  sprintf(path,"%s.Options",todaypaths[0]);
   optfile=fopen(path,"w");
   fprintf(optfile,"Highlight %d\n",highlightstate);
   radiobutton_get_state(0,addwin.window,0x1a,&state,&on);
@@ -3261,35 +3290,12 @@ int saveoptions_event(int event_code, ToolboxEvent *event, IdBlock *id_block,voi
 }
 
 //Routine to compare words for word lists
-int comparewordlist2(const void *e1,const void *e2)
+int comparewordlist(const void *e1,const void *e2)
 {
   char *word1,*word2;
-  int off1=0,off2=0,c1,c2;
-
   word1=((STRING *)e1)->str;
   word2=((STRING *)e2)->str;
-  do {
-    c1=lookup[word1[off1++]];
-    c2=lookup[word2[off2++]];
-    if (c1<32) {
-      if (c2<32) {
-        //Both finished so words are equal
-        return 0;
-      }
-      else
-      {
-        //Word2 is longer so word2 is greater
-        return -2;
-      }
-    }
-    if (c2<32) {
-      //Word1 is longer so word1 is greater
-      return 2;
-    }
-    if (c1>c2) {return 2;}
-    if (c1<c2) {return -2;}
-  } while (1);
-  return 0;
+  return comparewords(word1,word2,0,31,31);
 }
 
 //Routine to load a list of words from the messages file
@@ -3329,11 +3335,11 @@ int loadlist(int num,char *type)
   } while (error==NULL);
 
   //Sort the words into order
-  qsort((void *)wordlist[num],(size_t)wordlistlen[num],sizeof(STRING),comparewordlist2);
+  qsort((void *)wordlist[num],(size_t)wordlistlen[num],sizeof(STRING),comparewordlist);
   return 1;
 }
 
-int loadlists()
+int loadlists(void)
 {
   int loop,loop2,pos,offset,messagenum=1;
   char *temptable;
@@ -3368,7 +3374,7 @@ int loadlists()
       for (loop=0;loop<wordlistlen[3];loop++) {temptable[loop]=0;}
       offset=0;
       do {
-        temptable[findwordinlist(string2+offset,3)]=1;
+        temptable[findwordinlist(string2+offset,3,0)]=1;
         for (;string2[offset]!='_' && string2[offset]>=32;offset++) {}
         offset++;
       } while (string2[offset-1]=='_');
@@ -3476,7 +3482,7 @@ int main(int argc,char *argv[])
     }
 
     //Copy data path into block so it cannot be corrupted by other copies
-    len=_swi(OS_ReadVarVal,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_RETURN(2),"Today$Dir",todaypath,256,0,0);
+    len=_swi(OS_ReadVarVal,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_RETURN(2),"Today$Dir",todaypaths[0],256,0,0);
 
     //initialise the flex library.
     flex_init("Today",0);
