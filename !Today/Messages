@@ -32,6 +32,8 @@ e5:There is no text describing the event.
 e6:You must specify a day of the month before scanning.
 e7:Are you sure you want to delete this event?
 e8:Couldn't create file '%0'.
+e9:There is an invalid magic character in the search string at '%0'.
+e10:There is an invalid set in the search string at '%0'.
 
 Words to be replaced, format is old string,new string
 If the first letter of newstring is lower case it is made upper case

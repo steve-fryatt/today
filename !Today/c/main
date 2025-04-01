@@ -65,8 +65,8 @@ int *sprite_area,version;
 char monthnames[13][4];
 static int daysinmonth[13]={0,31,29,31,30,31,30,31,31,30,31,30,31};
 static char monthfiles[13][4]={"own","jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"};
-MessagesFD messages;
-FILE *debug;
+MessagesFD messages[2]={NULL,NULL};
+//FILE *debug;
 WIN_DATA scanwin,srchwin,addwin,editwin;
 
 //Lists of all of the types used by the program, 0=general list
@@ -75,9 +75,14 @@ WIN_DATA scanwin,srchwin,addwin,editwin;
 STRING eventlists[3][maxeventlen];
 int lenofeventlists[3],eventlistmaps[3][maxeventlen];
 
-STRING *wordlist[4];
-int wordlistlen[4];
+#define numofwordlists 4
+STRING *wordlist[numofwordlists];
+int wordlistlen[numofwordlists];
 int *thesauruslist;
+char wordlisttoken[numofwordlists][3]={'r','e',0,
+                                       'i','g',0,
+                                       'v','b',0,
+                                       't','h',0};
 
 ObjectId iconbar_id,joinwindow,typemenu;
 ComponentId iconbar_component;
@@ -95,10 +100,8 @@ char srchstring[64];
 
 WIN_DATA *sortwin[2];
 
-int numofwords[2],wordptrs[2][maxwordsinstring][2];
+int numofwords[2],stringwords[2][maxwordsinstring];
 char *sortlisttext;
-
-int tempcount1,tempcount2,tempcount3;
 
 //Lookup table of chars so punctuation is ignored and accents are removed
 const char lookup[256]={
@@ -138,6 +141,25 @@ const char lookup2[256]={
            'D','N','O','O','O','O','O', 1 , 2 ,'U','U','U','U','Y','P', 2 ,
             2 , 2 , 2 , 2 , 2 , 2 , 1 , 2 , 2 , 2 , 2 , 2 , 2 , 2 , 2 , 2 ,
             2 , 2 , 2 , 2 , 2 , 2 , 2 , 1 , 2 , 2 , 2 , 2 , 2 , 2 , 2 , 2 };
+
+//Lookup table of chars so punctuation is ignored and accents are removed
+const char lookup3[256]={
+             0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+            16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+           ' ','!','\"','#','$','%','&','\'','(',')','*','+',',','-','.','/',
+           '0','1','2','3','4','5','6','7','8','9',':',';','<','=','>','?',
+           '@','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
+           'P','Q','R','S','T','U','V','W','X','Y','Z','[','\\',']','^','_',
+           '`','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o',
+           'p','q','r','s','t','u','v','w','x','y','z','{','|','}','~',127,
+           'Ä','Å','Ç','É','Ñ','Ö','Ü','á','à','â','ä','ã','å','ç','é','è',
+           'ê','ë','í','ì','î','ï','ñ','ó','ò','ô','ö','õ','ú','ù','û','ü',
+           '†','°','¢','£','§','•','¶','ß','®','©','™','´','¨','≠','Æ','Ø',
+           '∞','±','≤','≥','¥','µ','∂','∑','∏','π','∫','ª','º','Ω','æ','ø',
+           'A','A','A','A','A','A','∆','C','E','E','E','E','I','I','I','I',
+           'D','N','O','O','O','O','O','◊','0','U','U','U','U','Y','P','S',
+           'a','a','a','a','a','a','Ê','c','e','e','e','e','i','i','i','i',
+           'd','n','o','o','o','o','o','˜','0','u','u','u','u','y','p','y'};
 
 //Compares two strings
 int caseinsencmp(char *str1,char *str2)
@@ -181,20 +203,30 @@ int movetoendofword(char *string,int offset)
 //setting to 32 means the strings do not terminate on spaces
 int comparewords(char *str1,char *str2,int verbcheck,int termchar1,int termchar2)
 {
-  int offset=0,c1,c2;
-  tempcount2++;
+  int offset=0,c1,c2,alluppercase1=1,alluppercase2=1;
   do {
+    //Check if word contains lower case letters
+    if (lookup2[str1[offset]]==2) {alluppercase1=0;}
+    if (lookup2[str2[offset]]==2) {alluppercase2=0;}
+
     c1=lookup[str1[offset]];
     c2=lookup[str2[offset++]];
     //Check to see if both words have finished (and are equal)
     if (c1<=termchar1 && c2<=termchar2) {return 0;}
   } while (c1==c2);
 
+  //Check for terminators so that verb ending check matches terminators
+  if (c1<=termchar1) {c1=0;}
+  if (c2<=termchar2) {c2=0;}
+
   //Check if verb check is to be done
   //Do not do a verb check if at a space and not terminating on spaces
-  if (offset>1 && verbcheck!=0 && (c1!=' ' || termchar1==32) && (c2!=' ' || termchar2==32)) {
-    //If not at the end of each word, see if remaining bit is in list of verb endings
-    if ((c1<=32 || findwordinlist(str1+offset-1,2,0)>=0) && (c2<=32 || findwordinlist(str2+offset-1,2,0)>=0)) {return 0;}
+  //Do not do a verb check if all of word is uppercase
+  if (offset>1 && verbcheck!=0) {
+    //See if string1 is terminated by a verb
+    if (c1>32 && alluppercase1==0 && findwordinlist(str1+offset-1,2,0,termchar1,31)>=0) {c1=0;}
+    //See if string2 is terminated by a verb
+    if (c2>32 && alluppercase2==0 && findwordinlist(str2+offset-1,2,0,termchar2,31)>=0) {c2=0;}
   }
 
   //Check if word1 is greater
@@ -205,10 +237,9 @@ int comparewords(char *str1,char *str2,int verbcheck,int termchar1,int termchar2
 }
 
 //Routine to find a word in a list of words (return index or -1 if not present)
-int findwordinlist(char *string,int num,int verbcheck)
+int findwordinlist(char *string,int num,int verbcheck,int termchar1,int termchar2)
 {
   int checkpos,firstpos,lastpos;
-  tempcount1++;
 
   //Set limits of possible positions
   firstpos=0;
@@ -218,7 +249,7 @@ int findwordinlist(char *string,int num,int verbcheck)
     //Do a binary chop so check the position in middle of range
     checkpos=(firstpos+lastpos)/2;
     //Compare required result to check position
-    switch (comparewords(string,wordlist[num][checkpos].str,verbcheck,32,31)) {
+    switch (comparewords(string,wordlist[num][checkpos].str,verbcheck,termchar1,termchar2)) {
       case -2:
         //String < Check position so any match must be before checkpos
         lastpos=checkpos;
@@ -226,7 +257,7 @@ int findwordinlist(char *string,int num,int verbcheck)
       case  0:
         //String matches, but check following items in case there are several
         //that match (eg United States and United States Of America)
-        while (checkpos+1<lastpos && comparewords(string,wordlist[num][checkpos+1].str,verbcheck,32,31)==0) {checkpos++;}
+        while (checkpos+1<lastpos && comparewords(string,wordlist[num][checkpos+1].str,verbcheck,termchar1,termchar2)==0) {checkpos++;}
         return checkpos;
         break;
       case  2:
@@ -240,37 +271,19 @@ int findwordinlist(char *string,int num,int verbcheck)
 
 //Routine to test words at start of strings are same, if verbcheck is non-zero and words do not match it checks to see
 //if the endings are in the verb list
-int comparewordswiththesaurus(char *str1,int thespos1,char *str2,int thespos2)
+int comparewordswiththesaurus(char *str1,int offset1,char *str2,int offset2)
 {
-  int termchar[2];
-  char *word[2];
-
-  if (thespos1>=0 && thespos2>=0) {
-    //Both words are in thesaurus so check is easy
-    if (thespos1>thespos2) {return 2;}
-    if (thespos1<thespos2) {return -2;}
+  if (offset1<0 || offset2<0) {
+    //One or both words are in thesaurus so check is easy
+    //This sorts words into order of words in thesaurus from Z to A and then
+    //words not in thesaurus from A to Z
+    if (offset1>offset2) {return 2;}
+    if (offset1<offset2) {return -2;}
     return 0;
   }
 
-  if (thespos1>=0) {
-    word[0]=wordlist[3][thespos1].str;
-    termchar[0]=31;
-  }
-  else
-  {
-    word[0]=str1;
-    termchar[0]=32;
-  }
-  if (thespos2>=0) {
-    word[1]=wordlist[3][thespos2].str;
-    termchar[1]=31;
-  }
-  else
-  {
-    word[1]=str2;
-    termchar[1]=32;
-  }
-  return comparewords(word[0],word[1],1,termchar[0],termchar[1]);
+  //Neither word is in the thesaurus so do the full comparison of words
+  return comparewords(str1+offset1,str2+offset2,1,32,32);
 }
 
 //Parse string by removing hard spaces, doubles/leading/trailing spaces
@@ -359,11 +372,8 @@ int parsestring(char *string)
     offset1=movetonextword(string,offset1);
     if (string[offset1]>=32) {
       //Have not reached the end of the string so check the word for a match
-      loop=findwordinlist(string+offset1,0,0);
+      loop=findwordinlist(string+offset1,0,0,32,31);
       if (loop!=-1) {
-
-        fprintf(debug,"Replacing: '%s' in '%s'\n",wordlist[0][loop].str,string);
-
         //Have found a word in the string so replace it
         //Find start of block after word
         offsettoreplace=strchr(wordlist[0][loop].str,',')+1;
@@ -386,9 +396,6 @@ int parsestring(char *string)
           string[offset1+len]=offsettoreplace[len];
         }
         offset1+=len;
-
-        fprintf(debug,"After Replace: '%s'\n",string);
-
       }
       else
       {
@@ -471,7 +478,7 @@ int reporterror(char *errortoken,char *str1)
 //This code is called by a Wimp_Quit message, it forces an immediate quit
 int quit_message(WimpMessage *message,void *handle)
 {
-  fclose(debug);
+//  fclose(debug);
   _swi(MessageTrans_CloseFile,_IN(0),&messages);
   exit(0);
   return 1;
@@ -880,7 +887,8 @@ int loadallevents(WIN_DATA *joindata,char *path,int filenum,int tempfile,int lis
     sprintf(filename,"%s.TodayData.%s",path,monthfiles[filenum]);
   }
   fileptr=fopen(filename,"rb");
-  if (fileptr==NULL) {return reporterror("e4",filename);}
+  //If file could not be opened, treat as empty
+  if (fileptr==NULL) {return 1;}
 
   //Now cycle through loading records
   do {
@@ -948,7 +956,7 @@ int readnextinitial(int num,REC_DATA *record,int *wordnum,int *offset,int *blank
   *blank=0;
 
   //if next letter is a blank or last initial was start of a word, move to next word
-  if ((*offset)<0 || lookup[sortwin[num]->text[record->textoff+wordptrs[num][*wordnum][0]+(*offset)]]<=32) {
+  if ((*offset)<0 || lookup[sortwin[num]->text[record->textoff+stringwords[num][*wordnum]+(*offset)]]<=32) {
     *blank=1;
 
     (*wordnum)++;
@@ -958,53 +966,36 @@ int readnextinitial(int num,REC_DATA *record,int *wordnum,int *offset,int *blank
     if (*wordnum>=numofwords[num]) {return 0;}
 
     //If next word has already been used stop
-    if (wordptrs[num][*wordnum][0]<0) {return 1;}
+    if (stringwords[num][*wordnum]<0) {return 1;}
   }
 
   //Find the next letter, know that it must be alphanumeric but it could be lower case
-  letter=lookup2[sortwin[num]->text[record->textoff+wordptrs[num][*wordnum][0]+((*offset)++)]];
+  letter=lookup2[sortwin[num]->text[record->textoff+stringwords[num][*wordnum]+((*offset)++)]];
 
   //Check to see if the letter following the initial is lowercase
-  if (lookup2[sortwin[num]->text[record->textoff+wordptrs[num][*wordnum][0]+(*offset)]]==2) {(*offset)=-(*offset);} 
+  if (lookup2[sortwin[num]->text[record->textoff+stringwords[num][*wordnum]+(*offset)]]==2) {(*offset)=-(*offset);} 
   return letter;
 }
 
 //Routine to compare words into alphabetical order
 int comparewords2(const void *e1,const void *e2)
 {
-  int *r[2],termchar[2],loop;
-  char *word[2];
-  r[0]=(int *)e1;
-  r[1]=(int *)e2;
-
-  if (r[0][1]>=0 && r[1][1]>=0) {
-    //Both words are in thesaurus so check is easy
-    if (r[0][1]>r[1][1]) {return 2;}
-    if (r[0][1]<r[1][1]) {return -2;}
-    return 0;
-  }
-
-  for (loop=0;loop<2;loop++) {
-    if (r[loop][1]>=0) {
-      word[loop]=wordlist[3][r[loop][1]].str;
-      termchar[loop]=31;
-    }
-    else
-    {
-      //Word is not in the thesaurus so set pointer to word in string
-      word[loop]=sortlisttext+r[loop][0];
-      termchar[loop]=32;
-    }
-  }
-  return comparewords(word[0],word[1],0,termchar[0],termchar[1]);
+  int r1,r2;
+  r1=*(int *)e1;
+  r2=*(int *)e2;
+  return comparewordswiththesaurus(sortlisttext,r1,sortlisttext,r2);
 }
 
+//Makes list of words. Sorts words into reverse alphabetic order of words in
+//thesaurus and then alphabetic order of remaining words. List does not include
+//initials or names that have matches between records.
+//Returns non-zero if it has found matching names/initials
 int makelistofwords(REC_DATA *record1,REC_DATA *record2)
 {
   int offset1,offset2,letter1,letter2,blank1,blank2,loop,loop2,loop3,loop4,oldcount;
-  int index,wordnum1,wordnum2,matchedinitialtoname,newoffset,newoffset2;
-  int oldstart[2],oldend[2],extend,thesauruspos;
-  char newname[128];
+  int wordnum1,wordnum2,matchedinitialtoname,newoffset,newoffset2;
+  int oldstart[2],oldend[2],extend,thesauruspos,result=0;
+  char newname[128],ignorable[2][maxwordsinstring];
   REC_DATA *records[2];
   records[0]=record1;
   records[1]=record2;
@@ -1015,7 +1006,17 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
     for (offset1=0;numofwords[loop]<maxwordsinstring && sortwin[loop]->text[records[loop]->textoff+offset1]>=32;) {
       offset1=movetonextword(sortwin[loop]->text+records[loop]->textoff,offset1);
       if (lookup[sortwin[loop]->text[records[loop]->textoff+offset1]]>32) {
-        wordptrs[loop][numofwords[loop]++][0]=offset1;
+        stringwords[loop][numofwords[loop]]=offset1;
+
+        //Check if word is ignorable
+        if (findwordinlist(sortwin[loop]->text+records[loop]->textoff+offset1,1,0,32,31)>=0) {
+          ignorable[loop][numofwords[loop]++]=1;
+        }
+        else
+        {
+          ignorable[loop][numofwords[loop]++]=0;
+        }
+
         offset1=movetoendofword(sortwin[loop]->text+records[loop]->textoff,offset1);
       }
     }
@@ -1023,11 +1024,11 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
 
   //Now check for any initials
   for (loop=0;loop<numofwords[0];loop++) {
-    if (wordptrs[0][loop][0]>=0) {
+    if (stringwords[0][loop]>=0) {
       //Check if this word starts with an upper case letter
-      if (lookup2[sortwin[0]->text[records[0]->textoff+wordptrs[0][loop][0]]]>32) {
+      if (lookup2[sortwin[0]->text[records[0]->textoff+stringwords[0][loop]]]>32) {
         for (loop2=0;loop2<numofwords[1];loop2++) {
-          if (wordptrs[1][loop2][0]>=0) {
+          if (stringwords[1][loop2]>=0) {
             //See if the initials match initials in string2
             offset1=offset2=0;
             wordnum1=loop;
@@ -1039,11 +1040,30 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
               if (blank1==1 && blank2==1 && matchedinitialtoname==0) {
                 //Both sets of initials have reached a blank and have not matched an inital to a name
                 //so they must match
-                for (loop3=loop;loop3<wordnum1;loop3++) {wordptrs[0][loop3][0]=-1;}
-                for (loop3=loop2;loop3<wordnum2;loop3++) {wordptrs[1][loop3][0]=-1;}
+
+                for (loop3=loop;loop3<wordnum1;loop3++) {stringwords[0][loop3]=-1;}
+                for (loop3=loop2;loop3<wordnum2;loop3++) {stringwords[1][loop3]=-1;}
   
                 //Stop looking for matches
                 loop2=numofwords[1];
+
+                //Set result so that calling routine knows match is found
+                if (result==0) {
+                  for (loop3=loop;loop3<wordnum1;loop3++) {
+                    if (ignorable[0][loop3]==0) {
+                      //Word would not be ignored normally so treat as common
+                      result=1;
+                      break;
+                    }
+                  }
+                  for (loop3=loop2;loop3<wordnum2;loop3++) {
+                    if (ignorable[1][loop3]==0) {
+                      //Word would not be ignored normally so treat as common
+                      result=1;
+                      break;
+                    }
+                  }
+                }
                 break;
               }
   
@@ -1054,7 +1074,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
               if (offset1<0) {
                 if (offset2<0) {
                   //Both letters were the start of words so compare the strings
-                  if (comparewords(sortwin[0]->text+records[0]->textoff+wordptrs[0][wordnum1][0]-offset1,sortwin[1]->text+records[1]->textoff+wordptrs[1][wordnum2][0]-offset2,0,32,32)==0) {
+                  if (comparewords(sortwin[0]->text+records[0]->textoff+stringwords[0][wordnum1]-offset1,sortwin[1]->text+records[1]->textoff+stringwords[1][wordnum2]-offset2,0,32,32)==0) {
                     //Build the new name to replace the old initials
                     if (matchedinitialtoname!=0) {
                       newoffset=0;
@@ -1068,8 +1088,8 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                           if (offset2>=0) {
                             newoffset2=-offset1-1;
                             do {
-                              newname[newoffset++]=sortwin[0]->text[records[0]->textoff+wordptrs[0][wordnum1][0]+newoffset2++];
-                            } while (lookup[sortwin[0]->text[records[0]->textoff+wordptrs[0][wordnum1][0]+newoffset2]]>32);
+                              newname[newoffset++]=sortwin[0]->text[records[0]->textoff+stringwords[0][wordnum1]+newoffset2++];
+                            } while (lookup[sortwin[0]->text[records[0]->textoff+stringwords[0][wordnum1]+newoffset2]]>32);
                             newname[newoffset++]=32;
                           }
                         }
@@ -1078,8 +1098,8 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                           if (offset2<0) {
                             newoffset2=-offset2-1;
                             do {
-                              newname[newoffset++]=sortwin[1]->text[records[1]->textoff+wordptrs[1][wordnum2][0]+newoffset2++];
-                            } while (lookup[sortwin[1]->text[records[1]->textoff+wordptrs[1][wordnum2][0]+newoffset2]]>32);
+                              newname[newoffset++]=sortwin[1]->text[records[1]->textoff+stringwords[1][wordnum2]+newoffset2++];
+                            } while (lookup[sortwin[1]->text[records[1]->textoff+stringwords[1][wordnum2]+newoffset2]]>32);
                             newname[newoffset++]=32;
                           }
                           else
@@ -1091,12 +1111,10 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                         }
                       } while (offset1>=0 || offset2>=0);
                       newname[newoffset]=0;
-                      oldstart[0]=wordptrs[0][loop][0];
-                      oldend[0]=wordptrs[0][wordnum1][0]-offset1-1;
-                      oldstart[1]=wordptrs[1][loop2][0];
-                      oldend[1]=wordptrs[1][wordnum2][0]-offset2-1;
-
-                      fprintf(debug,"Before: %s\n        %s\n        '%s'\n",sortwin[0]->text+records[0]->textoff,sortwin[1]->text+records[1]->textoff,newname);
+                      oldstart[0]=stringwords[0][loop];
+                      oldend[0]=stringwords[0][wordnum1]-offset1-1;
+                      oldstart[1]=stringwords[1][loop2];
+                      oldend[1]=stringwords[1][wordnum2]-offset2-1;
 
                       //Now replace the initials in memory
                       for (loop3=0;loop3<2;loop3++) {
@@ -1112,7 +1130,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                               }
                             }
                             for (loop4=0;loop4<numofwords[loop3];loop4++) {
-                              if (wordptrs[loop3][loop4][0]>oldstart[loop3]) {wordptrs[loop3][loop4][0]+=extend;}
+                              if (stringwords[loop3][loop4]>oldstart[loop3]) {stringwords[loop3][loop4]+=extend;}
                             }
                           }
                           else
@@ -1127,15 +1145,32 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                           sortwin[loop3]->text[records[loop3]->textoff+oldstart[loop3]+newoffset2]=newname[newoffset2];
                         }
                       }
-                      fprintf(debug,"After : %s\n        %s\n",sortwin[0]->text+records[0]->textoff,sortwin[1]->text+records[1]->textoff);
                     }
   
                     //Set all used words so they are not looked at later
-                    for (loop3=loop;loop3<=wordnum1;loop3++) {wordptrs[0][loop3][0]=-1;}
-                    for (loop3=loop2;loop3<=wordnum2;loop3++) {wordptrs[1][loop3][0]=-1;}
+                    for (loop3=loop;loop3<=wordnum1;loop3++) {stringwords[0][loop3]=-1;}
+                    for (loop3=loop2;loop3<=wordnum2;loop3++) {stringwords[1][loop3]=-1;}
   
                     //Stop looking for matches
                     loop2=numofwords[1];
+    
+                    //Set result so that calling routine knows match is found
+                    if (result==0) {
+                      for (loop3=loop;loop3<=wordnum1;loop3++) {
+                        if (ignorable[0][loop3]==0) {
+                          //Word would not be ignored normally so treat as common
+                          result=1;
+                          break;
+                        }
+                      }
+                      for (loop3=loop2;loop3<=wordnum2;loop3++) {
+                        if (ignorable[1][loop3]==0) {
+                          //Word would not be ignored normally so treat as common
+                          result=1;
+                          break;
+                        }
+                      }
+                    }
                   }
   
                   //Now stop at the match
@@ -1166,34 +1201,33 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
     oldcount=numofwords[loop];
     numofwords[loop]=0;
     for (loop2=0;loop2<oldcount;loop2++) {
-      if (wordptrs[loop][loop2][0]>=0) {
+      if (stringwords[loop][loop2]>=0) {
         //Word has not been removed by initial checking
-        index=findwordinlist(sortwin[loop]->text+records[loop]->textoff+wordptrs[loop][loop2][0],1,0);
         //Only keep word in the list if it is not to be ignored
-        if (index==-1) {
-          //Word is not to be ignored, so keep the pointer
-          wordptrs[loop][numofwords[loop]][0]=wordptrs[loop][loop2][0];
-
-          //Also check if the word is in the thesaurus table
-          thesauruspos=findwordinlist(sortwin[loop]->text+records[loop]->textoff+wordptrs[loop][loop2][0],3,1);
+        if (ignorable[loop][loop2]==0) {
+          //Check if the word is in the thesaurus table
+          thesauruspos=findwordinlist(sortwin[loop]->text+records[loop]->textoff+stringwords[loop][loop2],3,1,32,31);
           if (thesauruspos>=0) {
-            //Word is in the thesaurus so find the first word in list that it is equivalent to
-            wordptrs[loop][numofwords[loop]][1]=thesauruslist[thesauruspos];
+            //Word is in the thesaurus so find the store word in list that it
+            //is equivalent to (instead of the offset)
+            //Store as -(position+1) so that sorting puts all of the words
+            //in the thesaurus at start of list
+            stringwords[loop][numofwords[loop]]=-thesauruslist[thesauruspos]-1;
           }
           else
           {
-            //Word is not in list
-            wordptrs[loop][numofwords[loop]][1]=-1;
+            //Word is not in list so keep the pointer
+            stringwords[loop][numofwords[loop]]=stringwords[loop][loop2];
           }
           numofwords[loop]++;
         }
       }
     }
     sortlisttext=sortwin[loop]->text+records[loop]->textoff;
-    qsort((void *)wordptrs[loop],(size_t)numofwords[loop],2*sizeof(int),comparewords2);
+    qsort((void *)stringwords[loop],(size_t)numofwords[loop],sizeof(int),comparewords2);
   }
   
-  return 1;
+  return result;
 }
 
 //Tests to see any words are common between string1 and string2
@@ -1201,15 +1235,16 @@ int checkforcommonword(REC_DATA *r1,REC_DATA *r2)
 {
   int pos1=0,pos2=0,result;
 
-  //Make list of all of the words in the two strings
-  makelistofwords(r1,r2);
+  //Make list of all of the words in the two strings and stop if a common name
+  //is found
+  if (makelistofwords(r1,r2)!=0) {return 1;}
 
   //Find first word common to both lists
   for (;pos1<numofwords[0];pos1++) {
     //Find the first in second list>=word in first list
     result=2;
     while (pos2<numofwords[1] && result>0) {
-      result=comparewordswiththesaurus(sortwin[0]->text+r1->textoff+wordptrs[0][pos1][0],wordptrs[0][pos1][1],sortwin[1]->text+r2->textoff+wordptrs[1][pos2][0],wordptrs[1][pos2][1]);
+      result=comparewordswiththesaurus(sortwin[0]->text+r1->textoff,stringwords[0][pos1],sortwin[1]->text+r2->textoff,stringwords[1][pos2]);
       if (result==0) {return 1;}
       if (result>=0) {pos2++;}
     }
@@ -1218,16 +1253,16 @@ int checkforcommonword(REC_DATA *r1,REC_DATA *r2)
 }
 
 //Save all events to a file (but in possible duplicate states)
-int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum,int tempfile)
+int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum,int tempfile,int *possibleduplicates)
 {
   char filename[256];
-  int loop2,loop3,firstevent;
+  int loop,loop2,loop3,endpt,foundmore;
   FILE *fileptr;
   char *storedtable;
 
   //Allocate a table of currently stored events
   if (flex_alloc((flex_ptr)&storedtable,joindata->records*sizeof(char))==0) {return reporterror("e1",0);}
-  for(loop2=0;loop2<joindata->records;loop2++) {storedtable[loop2]=0;}
+  for(loop=0;loop<joindata->records;loop++) {storedtable[loop]=0;}
 
   //Check if storing to tempfile, this is so that
   //when sorting data can be moved from one month file to another
@@ -1245,10 +1280,10 @@ int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum,int tempfi
   fprintf(fileptr,"*-------- ------------------------------------------------------------\n");
   fprintf(fileptr,"*mmddyyyy Unknown Dates\n");
   fprintf(fileptr,"*-------- ------------------------------------------------------------\n");
-  for(loop2=0;loop2<joindata->records;loop2++) {
-    if (joindata->recorddata[loop2].year==unknown_year || joindata->recorddata[loop2].month<0 || joindata->recorddata[loop2].day<0) {
-      saverecord(fileptr,&joindata->recorddata[loop2],joindata);
-      storedtable[loop2]=1;
+  for(loop=0;loop<joindata->records;loop++) {
+    if (joindata->recorddata[loop].year==unknown_year || joindata->recorddata[loop].month<0 || joindata->recorddata[loop].day<0) {
+      saverecord(fileptr,&joindata->recorddata[loop],joindata);
+      storedtable[loop]=1;
     }
   }
 
@@ -1256,28 +1291,52 @@ int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum,int tempfi
   fprintf(fileptr,"\n*-------- ------------------------------------------------------------\n");
   fprintf(fileptr,"*mmddyyyy Possible Duplicates\n");
   fprintf(fileptr,"*-------- ------------------------------------------------------------\n");
-  for(loop2=0;loop2<joindata->records;loop2++) {
-    if (storedtable[loop2]==0) {
-      firstevent=1;
-      for (loop3=loop2+1;loop3<joindata->records && joindata->recorddata[loop3].year==joindata->recorddata[loop2].year && joindata->recorddata[loop3].month==joindata->recorddata[loop2].month && joindata->recorddata[loop3].day==joindata->recorddata[loop2].day;loop3++) {
-        if (storedtable[loop3]==0) {
-          //loop3 is on the same date, so see if there are common words
-          if (checkforcommonword(&joindata->recorddata[loop2],&joindata->recorddata[loop3])==1) {
-            //If this is the first event to be saved, save the first event in list
-            if (firstevent==1) {
-              saverecord(fileptr,&joindata->recorddata[loop2],joindata);
-              firstevent=0;
-              storedtable[loop2]=1;
-            }
-            //Now save the current event at bottom of list
-            saverecord(fileptr,&joindata->recorddata[loop3],joindata);
-            storedtable[loop3]=1;
-          }
+  for(loop=0;loop<joindata->records;loop++) {
+    if (storedtable[loop]==0) {
+      //Find the end of the range of possible duplicates
+      for (endpt=loop+1;endpt<joindata->records && joindata->recorddata[endpt].year==joindata->recorddata[loop].year && joindata->recorddata[endpt].month==joindata->recorddata[loop].month && joindata->recorddata[endpt].day==joindata->recorddata[loop].day;endpt++) {}
+      //Now see if the record at loop has any duplicates
+      for (loop2=loop+1;loop2<endpt;loop2++) {
+        if (storedtable[loop2]==0) {
+          if (checkforcommonword(&joindata->recorddata[loop],&joindata->recorddata[loop2])==1) {break;}
         }
       }
+      if (loop2<endpt) {
+        //Must have found a duplicate
+        storedtable[loop]=storedtable[loop2]=2;
+        //Now find any others that match these records
+        do {
+          foundmore=0;
+          for (loop2=loop+1;loop2<endpt;loop2++) {
+            if (storedtable[loop2]==0) {
+              for (loop3=loop;loop3<endpt;loop3++) {
+                if (storedtable[loop3]==2) {
+                  if (checkforcommonword(&joindata->recorddata[loop2],&joindata->recorddata[loop3])==1) {
+                    //The record matchs another record that has already matched
+                    storedtable[loop2]=2;
+                    foundmore=1;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        } while (foundmore==1);
 
-      //Now put a blank line afterwards to separate possible duplicates
-      if (firstevent==0) {fprintf(fileptr,"\n");}
+        //Now save the records
+        saverecord(fileptr,&joindata->recorddata[loop],joindata);
+        (*possibleduplicates)++;
+        storedtable[loop]=1;
+        for (loop2=loop+1;loop2<endpt;loop2++) {
+          if (storedtable[loop2]==2) {
+            saverecord(fileptr,&joindata->recorddata[loop2],joindata);
+            storedtable[loop2]=1;
+          }
+        }
+
+        //Now put a blank line afterwards to separate possible duplicates
+        fprintf(fileptr,"\n");
+      }
     }
   }
 
@@ -1285,9 +1344,9 @@ int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum,int tempfi
   fprintf(fileptr,"*-------- ------------------------------------------------------------\n");
   fprintf(fileptr,"*mmddyyyy Unlikely To Be Duplicates\n");
   fprintf(fileptr,"*-------- ------------------------------------------------------------\n");
-  for(loop2=0;loop2<joindata->records;loop2++) {
-    if (storedtable[loop2]==0) {
-      saverecord(fileptr,&joindata->recorddata[loop2],joindata);
+  for(loop=0;loop<joindata->records;loop++) {
+    if (storedtable[loop]==0) {
+      saverecord(fileptr,&joindata->recorddata[loop],joindata);
     }
   }
 
@@ -1300,7 +1359,7 @@ int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum,int tempfi
 //Test to see if string 1 is inside string 2 or vice versa
 int comparestrings(REC_DATA *r1,REC_DATA *r2)
 {
-  int found=0,pos1=0,pos2=0,result;
+  int found=0,pos1=0,pos2=0,result,offset,letter1,letter2;
 
   //Make list of all of the words in the two strings
   makelistofwords(r1,r2);
@@ -1310,7 +1369,7 @@ int comparestrings(REC_DATA *r1,REC_DATA *r2)
     //Find the first in second list>=word in first list
     result=2;
     while (pos2<numofwords[1] && result>0) {
-      result=comparewordswiththesaurus(sortwin[0]->text+r1->textoff+wordptrs[0][pos1][0],wordptrs[0][pos1][1],sortwin[1]->text+r2->textoff+wordptrs[1][pos2][0],wordptrs[1][pos2][1]);
+      result=comparewordswiththesaurus(sortwin[0]->text+r1->textoff,stringwords[0][pos1],sortwin[1]->text+r2->textoff,stringwords[1][pos2]);
       if (result==0) {found++;}
       if (result>=0) {pos2++;}
     }
@@ -1337,8 +1396,17 @@ int comparestrings(REC_DATA *r1,REC_DATA *r2)
     return 1;
   }
 
-  //Not all the words in 1 are in 2 and not all words in 2 are in 1
-  return -2;
+  //Each string contains words not in the other string so do alphabetic compare
+  //this is so that the qsort routines do not get confused
+  offset=0;
+  do {
+    letter1=lookup[sortwin[0]->text[r1->textoff+offset]];
+    letter2=lookup[sortwin[1]->text[r2->textoff+offset]];
+    if (letter1<letter2) {return -2;}
+    if (letter1>letter2) {return 2;}
+    offset++;
+  } while (letter1>0);
+  return 0;
 }
 
 //Routine to compare records for the join sort
@@ -1521,27 +1589,230 @@ int comparerecords(const void *e1,const void *e2)
   return 0;
 }
 
+//Routine to decode the symbol in the supplied string and check if it is valid
+//Returns symbol in c
+//  0-255  ASCII Character
+//  1000   Alphabetic
+//  1001   Digit
+//  1002   Alphanumeric
+//  1003   Any character
+//  1004   Punctuation
+//  2000   0 or more chars
+//  2001   not char
+//  2002   0 or more of char
+//  2003   1 or more of char
+//Returns -ve if the symbol is invalid
+//If inset is non-zero checks are done to make sure symbol is allowed in a set
+int decode_symbol(char *str,int *len,int inset)
+{
+  //Check for magic characters
+  switch (str[0]) {
+    case '\\':
+      *len=2;
+      switch (str[1]) {
+        case '*':
+          //Check for 0 or more characters
+          if (inset==0) {return 2000;}
+          break;
+        case '.':
+          //Check for any character
+          return 1003;
+          break;
+        case 'a':
+        case 'A':
+          //Check for an alphanumeric character
+          return 1002;
+          break;
+        case 'd':
+        case 'D':
+          //Check for a digit
+          return 1001;
+          break;
+        case 'c':
+        case 'C':
+          //Check for an alphabetic character
+          return 1000;
+          break;
+        case 'p':
+        case 'P':
+          //Check for a punctuation character
+          return 1004;
+          break;
+        case '\\':
+        case '[':
+        case ']':
+        case '-':
+          //Check for a normal
+          return str[1];
+          break;
+        case '~':
+          //Check for not a character  
+          if (inset==0) {return 2001;}
+          break;
+        case '&':
+          //Check for 0 or more of a character
+          if (inset==0) {return 2002;}
+          break;
+        case '^':
+          //Check for 1 or more of a character
+          if (inset==0) {return 2003;}
+          break;
+      }
+    case '[':
+      //Invalid if in a set
+      if (inset==0) {
+        *len=1;
+        return '[';
+      }
+    case ']':
+    case '-':
+      //Invalid characters for symbols
+      return -1;
+    default:
+      //All other chars
+      *len=1;
+      return str[0];
+  }
+  return -1;
+}
+
+//Code to check if a character is in a character set (0 if it isn't, 1 if it is)
+//Returns the length to the end of the set in len
+int findcharinset(char c,char *set,int *len)
+{
+  int off,c2,c3,len2;
+  if (set[0]=='[') {
+    //Find the length of the set
+    for((*len)=1;set[(*len)]!=']';(*len)++) {}
+    (*len)++;
+    //Start of a set, keep checking until the end
+    for(off=1;set[off]!=']';) {
+      c2=decode_symbol(set+off,&len2,1);
+      off+=len2;
+      switch (c2) {
+        case 1003:
+          //Check for a single character
+          if (c>=32) {return 1;} 
+          break;
+        case 1002:
+          //Check for an alphanumeric character
+          if (isalnum(c)!=0) {return 1;}
+          break;
+        case 1001:
+          //Check for a digit
+          if (isdigit(c)!=0) {return 1;}
+          break;
+        case 1000:
+          //Check for an alphabetic character
+          if (isalpha(c)!=0) {return 1;}
+          break;
+        case 1004:
+          //Check for a punctuation character
+          if (lookup[c]==1 || lookup[c]=='&') {return 1;}
+          break;
+        default:
+          //Check if matches to a range
+          if (set[off]=='-') {
+            off++;
+            c3=decode_symbol(set+off,&len2,1);
+            off+=len2;
+            if (c>=c2 && c<=c3) {return 1;}
+          }
+          else
+          {
+            if (c==c2) {return 1;}
+          }
+          break;
+      }
+    }
+  }
+  else
+  {
+    //Single character
+    c2=decode_symbol(set,len,1);
+    switch (c2) {
+      case 1003:
+        //Check for a single character
+        if (c>=32) {return 1;} 
+        break;
+      case 1002:
+        //Check for an alphanumeric character
+        if (isalnum(c)!=0) {return 1;}
+        break;
+      case 1001:
+        //Check for a digit
+        if (isdigit(c)!=0) {return 1;}
+        break;
+      case 1000:
+        //Check for an alphabetic character
+        if (isalpha(c)!=0) {return 1;}
+        break;
+      case 1004:
+        //Check for a punctuation character
+        if (lookup[c]<=1 || lookup[c]=='&') {return 1;}
+        break;
+      default:
+        //Check if matches exactly
+        if (c==c2) {return 1;}
+        break;
+    }
+  }     
+  return 0;
+}
+
 //Code checks for match between strings
 //Returns non-zero if a match
 int wildcardmatch(char *str1,char *str2,int casesen)
 {
-  int off1=0,off2,char1,char2;
+  int off1,off2,off3,off4,char1,char2,failed,len;
 
   //Run through possible starts to string
-  for (;;off1++) {
+  for (off1=0;;off1++) {
     //Run through second string
+    off3=0;
     for (off2=0;;off2++) {
-      char1=str1[off1+off2];
+      char1=str1[off1+off2]; 
+      //Remove accents from letters
+      char1=lookup3[char1];
       if (casesen==0) {char1=toupper(char1);}
-      char2=str2[off2];
-      //if character in wildcard is a '*' call recursively
-      if(char2=='*') {return wildcardmatch(str1+off1+off2,str2+off2+1,casesen);}
+      char2=decode_symbol(str2+off3,&len,0);
       //if str2 has finished then must be a match
       if (char2<32) {return 1;}
       //if str1 has finished then cannot be a match
-      if (char1<32) {return 0;}
-      //if characters do not match then stop
-      if (char2!='?' && char1!=char2) {break;}
+      if (char1<32 && char2!=2000) {return 0;}
+      //Check for magic characters in char2
+      failed=0;
+      switch (char2) {
+        case 2000:
+          //Check for 0 or more characters
+          return wildcardmatch(str1+off1+off2,str2+off3+2,casesen);
+          break;
+        case 2001:
+          //Check for not a character  
+          off3+=2;
+          failed=findcharinset(char1,str2+off3,&len);
+          break;
+        case 2002:
+        case 2003:
+          //Check for 0/1 or more of a character
+          off3+=2;
+          for (off4=off2;;off2++) {
+            char1=str1[off1+off2]; 
+            //Remove accents from letters
+            char1=lookup3[char1];
+            if (casesen==0) {char1=toupper(char1);}
+            if (findcharinset(char1,str2+off3,&len)==0) {break;}
+          }
+          if (char2==2003 && off2==off4) {failed=1;}
+          off2--;
+          break;
+        default:
+          //Check for character in set
+          failed=1-findcharinset(char1,str2+off3,&len);
+      }
+      if (failed!=0) {break;}
+      //Move to after the character/set
+      off3+=len;
     }
   }
   return 0;
@@ -1622,6 +1893,7 @@ int editevent(WIN_DATA *win,int flags)
 
   if ((flags&1)!=0) {
     //Check to see if the event being deleted is in either of the windows
+    ignoretypes=ignoreyears=0;
     sortwin[0]=win;
     sortwin[1]=&scanwin;
     for (loop=0;loop<sortwin[1]->records && joincompare(&sortwin[0]->recorddata[0],&sortwin[1]->recorddata[loop])!=0;loop++) {}
@@ -1852,7 +2124,7 @@ int altertypes_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void
 //This code is called when quit is selected on the menu
 int menuquit_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
-  fclose(debug);
+//  fclose(debug);
   _swi(MessageTrans_CloseFile,_IN(0),&messages);
   exit(0);
   return 1;
@@ -1931,7 +2203,8 @@ int scanfile(int filenum)
   //Open the file
   sprintf(filename,"%s.TodayData.%s",todaypaths[0],monthfiles[filenum]);
   fileptr=fopen(filename,"rb");
-  if (fileptr==NULL) {return reporterror("e4",filename);}
+  //If file could not be opened, treat as empty
+  if (fileptr==NULL) {return 1;}
 
   //Now cycle through loading records
   do {
@@ -2064,15 +2337,109 @@ int beginscan(void)
   return 1;
 }
 
+//This routine checks if the string pointed to is a valid set
+//Returns the length or -ve if invalid
+int check_valid_set(char *str) 
+{
+  int len,len2,c;
+  
+  if (str[0]=='[') {
+    //Start of a set
+    for (len=1;str[len]!=']';) {
+      c=decode_symbol(str+len,&len2,1);
+      //If an invalid symbol or an early terminator abandon the symbol
+      if (c<32) {return -1;}
+      len+=len2;
+      if (c<256 && str[len]=='-') {
+        //Have found a range symbol
+        len++;
+        c=decode_symbol(str+len,&len2,1);
+        //If an invalid symbol or an early terminator abandon the symbol
+        if (c<32 || c>255) {return -1;}
+        len+=len2;
+      }
+    }
+    len++;
+  }
+  else
+  {   
+    //Single magic symbol
+    c=decode_symbol(str,&len,1);
+    if (c<0) {return -1;}
+  }
+  return len;
+}
+
 //This code is called when search is selected
 int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
   int loop,searchresult=1,recresult=1,state,len;
-  int offset=0,offset2=0,offset3=0,nextchar,lastchar=32;
-  char text[12],filename[256];
+  int offset=0,offset2=0,offset3=0,nextchar,char2;
+  char text[12],filename[256],newsrch[64];
   FILE *fileptr;
 
   _swi(Hourglass_On,0);
+
+  //Read string to search and parse it
+  writablefield_get_value(0,srchwin.toolbar,1,newsrch,64,&len);
+  //Remove leading spaces
+  for (;newsrch[offset]==32 || newsrch[offset]==160;offset++) {}
+  //Copy all up to terminator removing hard spaces
+  for (;newsrch[offset]>=32;offset++) {
+    nextchar=newsrch[offset];
+    if (nextchar==160) {nextchar=32;}
+    newsrch[offset2++]=nextchar;
+    if (nextchar!=32) {offset3=offset2;}
+  }
+  //Put terminator after last non-space
+  newsrch[offset3++]=0;
+  
+  //Check that all magic characters are valid
+  for (offset=0;offset<offset3;) {
+    char2=decode_symbol(newsrch+offset,&len,0);
+    //Check for magic characters in char2
+    switch (char2) {
+      case -1:
+        //Have found an invalid magic character so abort
+        reporterror("e9",newsrch+offset);
+        return 1;
+        break;
+      case 2000:
+      case 1000:
+      case 1001:
+      case 1002:
+      case 1003:
+      case 1004:
+        //Valid sybols with no follow on sets so ok
+        offset+=len;
+      case 2001:
+      case 2002:
+      case 2003:
+        //Valid symbol but need to check the following set
+        offset+=len;
+        len=check_valid_set(newsrch+offset);
+        if (len<=0) {
+          //Set is invalid so error
+          reporterror("e10",newsrch+offset);
+          return 1;
+        }
+        offset+=len;
+        break;
+      case '[':
+        //Check for a valid set
+        len=check_valid_set(newsrch+offset);
+        if (len<=0) {
+          //Set is invalid so error
+          reporterror("e10",newsrch+offset);
+          return 1;
+        }
+        offset+=len;
+        break;
+      default:
+        //Just a character so move on
+        offset+=len;
+    }
+  }
 
   //Clear all of previous search data
   if (srchwin.recorddata!=NULL) {flex_free((flex_ptr)&srchwin.recorddata);}
@@ -2088,24 +2455,16 @@ int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
     srchmask+=(state!=0)<<loop;
   }
 
-  //Read string to search and parse it
-  writablefield_get_value(0,srchwin.toolbar,1,srchstring,64,&len);
-  optionbutton_get_state(0,srchwin.toolbar,2,&srchcasesen);
-  //Remove leading spaces
-  for (;srchstring[offset]==32 || srchstring[offset]==160 || srchstring[offset]=='*';offset++) {}
-  //Copy all up to terminator removing double spaces
-  for (;srchstring[offset]>=32;offset++) {
-    nextchar=srchstring[offset];
-    if (nextchar==160) {nextchar=32;}
-    if (srchcasesen==0) {nextchar=toupper(nextchar);}
-    if (nextchar!=32 || lastchar!=32) {srchstring[offset2++]=nextchar;}
-    if (nextchar!=32 && nextchar!='*') {offset3=offset2;}
-    lastchar=nextchar;
-  }
-  //Put terminator after last non-space
-  srchstring[offset3++]=0;
-
   //Check the range for the search
+  optionbutton_get_state(0,srchwin.toolbar,2,&srchcasesen);
+  //Copy all up to terminator removing hard spaces
+  for (offset=0;newsrch[offset]>=32;offset++) {
+    nextchar=newsrch[offset];
+    if (srchcasesen==0) {nextchar=toupper(nextchar);}
+    srchstring[offset]=nextchar;
+  }
+  srchstring[offset++]=0;
+  
   optionbutton_get_state(0,srchwin.toolbar,11,&srchrange);
   numberrange_get_value(0,srchwin.toolbar,19,&srchyear1);
   stringset_get_selected(1,srchwin.toolbar,15,&srchmonth1);
@@ -2120,11 +2479,14 @@ int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
   for (loop=0;loop<=12 && searchresult!=0;loop++) {
     sprintf(filename,"%s.TodayData.%s",todaypaths[0],monthfiles[loop]);
     fileptr=fopen(filename,"rb");
+    //If file cannot be opened, treat it as empty
     if (fileptr==NULL) {
-      reporterror("e4",filename);
-      searchresult=0;
+      recresult=0;
     }
-    recresult=1;
+    else
+    {
+      recresult=1;
+    }
     while (searchresult!=0 && recresult>0) {
       recresult=loadnextrecord(fileptr,&srchwin,loop,recordlimit,0,0);
       if (recresult==0) {searchresult=0;}
@@ -2376,8 +2738,6 @@ int openingsave_event(int event_code, ToolboxEvent *event, IdBlock *id_block,voi
 int deleterecord(int del,int keep)
 {
   int loop;
-  fprintf(debug,"Keeping  : %s\n",sortwin[0]->text+sortwin[0]->recorddata[keep].textoff);
-  fprintf(debug,"Deleting : %s\n",sortwin[0]->text+sortwin[0]->recorddata[del].textoff);
   if (sortwin[0]->recorddata[keep].type==0 || (sortwin[0]->recorddata[keep].type<=2 && sortwin[0]->recorddata[del].type>2)) {
     //Type of kept record is unknown or it is an event/rmeinder
     //and other record is more specific so copy type of other record
@@ -2477,17 +2837,53 @@ int setuptypemenus(int oldnumoftypes)
   return 1;
 }
 
+//Saves the specified list to the file
+int savelisttomessages(FILE *fileptr2,int messlinetype)
+{
+  int loop,loop2,count=1;
+  switch (messlinetype) {
+    case 0:
+      //Write out the event type strings
+      for (loop=0;loop<lenofeventlists[0];loop++) {
+        fprintf(fileptr2,"ev%d:%s\n",loop,eventlists[0][loop].str);
+      }
+      break;
+    case 1:
+    case 2:
+    case 3:
+      //Write out the word lists
+      for (loop=0;loop<wordlistlen[messlinetype-1];loop++) {
+        fprintf(fileptr2,"%s%d:%s\n",wordlisttoken[messlinetype-1],loop+1,wordlist[messlinetype-1][loop].str);
+      }
+      break;
+    case 4:
+      for (loop=0;loop<wordlistlen[3];loop++) {
+        if (thesauruslist[loop]==loop) {
+          fprintf(fileptr2,"%s%d:%s",wordlisttoken[messlinetype-1],count++,wordlist[3][loop].str);
+          for (loop2=loop+1;loop2<wordlistlen[3];loop2++) {
+            if (thesauruslist[loop2]==loop) {
+              fprintf(fileptr2,"_%s",wordlist[3][loop2].str);
+            }
+          }
+          fprintf(fileptr2,"\n");
+        }
+      }
+      break;
+  }
+  return 1;
+}
+
 //Joins and sorts data
 int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
-  int loadedevents=0,savedevents=0,filenum,loop,loop2,loop3,len,result,listnum;
-  int listnum2,namesmatch,oldnumoftypes,letter,state,selected,time,recresult,pathnum;
-  int curtempfile,nexttempfile;
-  char text1[8],text2[8],text3[8];
+  int loadedevents=0,savedevents=0,possibleduplicates=0,messlinetype;
+  int filenum,loop,loop2,loop3,len,result,listnum,listnum2,namesmatch;
+  int oldnumoftypes,letter,state,selected,recresult,pathnum;
+  int curtempfile,nexttempfile,savedlinetype[1+numofwordlists];
+  char text1[12],text2[12],text3[12],text4[12];
   char filepath[256],filepath2[256],messline[256];
   _kernel_oserror error,*error2;
   WIN_DATA joindata;
-  MessagesFD newmess;
   FILE *fileptr,*fileptr2,*tempfileptr;
 
   _swi(Hourglass_On,0);
@@ -2499,7 +2895,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
   oldnumoftypes=lenofeventlists[0];
 
   //Set mapping buffer for first set of files to load
-  loadeventlist(&messages,1);
+  loadeventlist(&messages[0],1);
 
   todaypaths[1][0]=0;
   if (event->hdr.event_code==9) {
@@ -2507,18 +2903,19 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
 
     //Build the new event type list by loading the lists into two buffers
     sprintf(todaypaths[1]+len-1,".Messages");
-    error2=_swix(MessageTrans_OpenFile,_IN(0)|_IN(1)|_IN(2),&newmess,todaypaths[1],0);
+    error2=_swix(MessageTrans_OpenFile,_IN(0)|_IN(1)|_IN(2),&messages[1],todaypaths[1],0);
     todaypaths[1][len-1]=0;
     if (error2==NULL) {
-      loadeventlist(&newmess,2);
-      _swi(MessageTrans_CloseFile,_IN(0),&newmess);
+      loadeventlist(&messages[1],2);
+      loadlists(2);
+      _swi(MessageTrans_CloseFile,_IN(0),&messages[1]);
     }
     else
     {
       loadeventlist(NULL,2);
     }
 
-    //Now combine the lists into one
+    //Now combine the event lists into one
     lenofeventlists[0]=0;
     for (listnum=1;listnum<=2;listnum++) {
       for (loop=0;loop<lenofeventlists[listnum];loop++) {
@@ -2583,17 +2980,23 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
     }
   }
 
-  time=_swi(OS_ReadMonotonicTime,_RETURN(0));
-  tempcount1=0;
-  tempcount2=0;
-  tempcount3=0;
-
-  //Shuffle events from the files for todaypaths[0] and todaypaths[1] 
+  //Shuffle events from the files for todaypaths[0] and todaypaths[1]
   //into the correct temporary files
   //First create the empty temporary files
   for (filenum=0;filenum<=12;filenum++) {
     sprintf(filepath,"%s.TodayData._%s",todaypaths[0],monthfiles[filenum]);
     tempfileptr=fopen(filepath,"w");
+
+    if (tempfileptr==NULL) {
+      if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
+      if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
+      //Restore the event type list
+      loadeventlist(&messages[0],0);
+      loadlists(1);
+      reporterror("e3",filepath);
+      return 1;
+    }
+
     fclose(tempfileptr);
   }
   //Now set the current temp file to the own file and open to apend
@@ -2601,14 +3004,23 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
   curtempfile=0;
   sprintf(filepath,"%s.TodayData._%s",todaypaths[0],monthfiles[0]);
   tempfileptr=fopen(filepath,"a");
+  if (tempfileptr==NULL) {
+    if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
+    if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
+    //Restore the event type list
+    loadeventlist(&messages[0],0);
+    loadlists(1);
+    reporterror("e3",filepath);
+    return 1;
+  }
 
   for (filenum=0;filenum<=12;filenum++) {
     for (pathnum=0;pathnum<2;pathnum++) {
       if (todaypaths[pathnum][0]>=32) {
         sprintf(filepath,"%s.TodayData.%s",todaypaths[pathnum],monthfiles[filenum]);
         fileptr=fopen(filepath,"rb");
-  
-        do {
+        recresult=1;
+        while (fileptr!=NULL && recresult>0) {
           recresult=loadnextrecord(fileptr,&joindata,filenum,0x7fffffff,pathnum+1,0);
           if (recresult==0) {
             fclose(fileptr);
@@ -2616,7 +3028,8 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
             if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
             if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
             //Restore the event type list
-            loadeventlist(&messages,0);
+            loadeventlist(&messages[0],0);
+            loadlists(1);
             return 1;
           }
           if (recresult>0) {
@@ -2636,11 +3049,22 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
               curtempfile=nexttempfile;
               sprintf(filepath,"%s.TodayData._%s",todaypaths[0],monthfiles[curtempfile]);
               tempfileptr=fopen(filepath,"a");
+              if (tempfileptr==NULL) {
+               fclose(fileptr);
+                fclose(tempfileptr);
+                if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
+                if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
+                //Restore the event type list
+                loadeventlist(&messages[0],0);
+                loadlists(1);
+                reporterror("e3",filepath);
+                return 1;
+              }
             }
             //Now save the record to the temp file
             saverecord(tempfileptr,&joindata.recorddata[0],&joindata);
           }
-        } while (recresult>0);
+        };
         fclose(fileptr);
       }
     }
@@ -2656,7 +3080,8 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
       if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
       if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
       //Restore the event type list
-      loadeventlist(&messages,0);
+      loadeventlist(&messages[0],0);
+      loadlists(1);
       return 1;
     }
 
@@ -2720,7 +3145,8 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
         if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
         if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
         //Restore the event type list
-        loadeventlist(&messages,0);
+        loadeventlist(&messages[0],0);
+        loadlists(1);
         return NULL;
       }
     }
@@ -2731,18 +3157,18 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
       ignoreyears=0;
       qsort((void *)joindata.recorddata,(size_t)joindata.records,sizeof(REC_DATA),joincompare);
       //Save data
-      if (savealleventsinduporder(&joindata,todaypaths[0],filenum,1)==NULL) {
+      if (savealleventsinduporder(&joindata,todaypaths[0],filenum,1,&possibleduplicates)==NULL) {
         if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
         if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
         //Restore the event type list
-        loadeventlist(&messages,0);
+        loadeventlist(&messages[0],0);
+        loadlists(1);
         return NULL;
       }
     }
     savedevents+=joindata.records;
     _swi(Hourglass_Percentage,_IN(0),50+((filenum+1)*50/13));
   }
-  fprintf(debug,"Time=%d\nCount1=%d\nCount2=%d\nCount3=%d\n",_swi(OS_ReadMonotonicTime,_RETURN(0))-time,tempcount1,tempcount2,tempcount3);
 
   if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
   if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
@@ -2762,7 +3188,8 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
     if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
     //Restore the event type list
     _swix(MessageTrans_OpenFile,_IN(0)|_IN(1)|_IN(2),&messages,filepath,0);
-    loadeventlist(&messages,0);
+    loadeventlist(&messages[0],0);
+    loadlists(1);
     return reporterror("e4",filepath);
   }
   sprintf(filepath2,"%s._Messages",todaypaths[0]);
@@ -2773,10 +3200,12 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
     //Restore the event type list
     fclose(fileptr);
     _swix(MessageTrans_OpenFile,_IN(0)|_IN(1)|_IN(2),&messages,filepath,0);
-    loadeventlist(&messages,0);
+    loadeventlist(&messages[0],0);
+    loadlists(1);
     return reporterror("e8",filepath2);
   }
   //Copy all of the data from the old file to the new file
+  for (loop=0;loop<=numofwordlists;loop++) {savedlinetype[loop]=0;}
   while(feof(fileptr)==0) {
     len=0;
     do {
@@ -2785,19 +3214,40 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
     } while (letter!=EOF && letter>=32);
     messline[len]=0;
 
-    //Only store if there is really a string there
+    //Find the type of the line
     if (feof(fileptr)==0 || len>0) {
-      //Only store if the string isn't an event code
-      if (messline[0]!='e' || messline[1]!='v' || messline[2]<'0' || messline[2]>'9' || (messline[3]!=':' && (messline[3]<'0' || messline[3]>'9'))) {
+      messlinetype=-1;
+      if (isalpha(messline[0]) && isalpha(messline[1])) {
+        for (loop=2;messline[loop]>=32 && messline[loop]!=':' && isdigit(messline[loop]);loop++) {}
+        if (messline[loop]==':' || messline[loop]<32) {
+          //Looks like the string was a list item, so find list number
+          if (tolower(messline[0])=='e' && tolower(messline[1])=='v') {messlinetype=0;}
+          for (loop=0;loop<numofwordlists;loop++) {
+            if (tolower(messline[0])==wordlisttoken[loop][0] && tolower(messline[1])==wordlisttoken[loop][1]) {messlinetype=loop+1;}
+          }
+        }
+      }
+      if (messlinetype>=0) {
+        //Need to save all of the words in this list here
+        if (savedlinetype[messlinetype]==0) {
+          savedlinetype[messlinetype]=1;
+          savelisttomessages(fileptr2,messlinetype);
+        }
+      }
+      else
+      {
         fprintf(fileptr2,"%s\n",messline);
       }
     }
   }
 
-  //Write out the event type strings
-  for (loop=0;loop<lenofeventlists[0];loop++) {
-    fprintf(fileptr2,"ev%d:%s\n",loop,eventlists[0][loop].str);
+  //Write out any remaining lists that were not saved in correct place
+  for (loop=0;loop<=numofwordlists;loop++) {
+    if (savedlinetype[loop]==0) {
+      savelisttomessages(fileptr2,loop);
+    }
   }
+
   fclose(fileptr);
   fclose(fileptr2);
   //Move all of the temporary saved files into permanent spaces
@@ -2819,7 +3269,15 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
   sprintf(text1,"%d",loadedevents);
   sprintf(text2,"%d",loadedevents-savedevents);
   sprintf(text3,"%d",savedevents);
-  _swi(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_IN(5)|_IN(6),&messages,"t5",error.errmess,252,text1,text2,text3);
+  radiobutton_get_state(0,joinwindow,8,&state,&selected);
+  if (state==1) {
+    _swi(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_IN(5)|_IN(6),&messages,"t5",error.errmess,252,text1,text2,text3);
+  }
+  else
+  {
+    sprintf(text4,"%d",possibleduplicates);
+    _swi(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_IN(5)|_IN(6)|_IN(7),&messages,"t6",error.errmess,252,text1,text2,text3,text4);
+  }
   _swi(Wimp_ReportError,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_IN(5),&error,1+(1<<8)+(1<<9),"Today",0,1,0);
   return 1;
 }
@@ -3360,107 +3818,128 @@ int comparewordlist(const void *e1,const void *e2)
   char *word1,*word2;
   word1=((STRING *)e1)->str;
   word2=((STRING *)e2)->str;
-  return comparewords(word1,word2,0,31,31);
+  return comparewords(word1,word2,1,31,31);
 }
 
 //Routine to load a list of words from the messages file
-int loadlist(int num,char *type)
+int loadlist(int num,int numoffiles)
 {
-  int loop,offset,messagenum=1,aftercomma;
+  int loop,loop2,offset,messagenum;
   char string[8],string2[64];
   _kernel_oserror *error;
   flex_alloc((flex_ptr)&wordlist[num],sizeof(STRING));
   wordlistlen[num]=0;
-  do {
-    sprintf(string,"%s%d",type,messagenum++);
-    error=_swix(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages,string,string2,64);
-    if (error==NULL) {
-      //Keep loading strings until no more '_'s are found
-      offset=0;
-      do {
-        flex_extend((flex_ptr)&wordlist[num],(wordlistlen[num]+1)*sizeof(STRING));
-        //Copy the string and turn bits before comma to uppercase
-        aftercomma=0;
-        for (loop=0;string2[offset+loop]!='_' && string2[offset+loop]>=32;loop++) {
-          //Turn letter to uppercase if it is before the comma
-          if (aftercomma==0) {
-            if (string2[offset+loop]==',') {aftercomma=1;}
-            wordlist[num][wordlistlen[num]].str[loop]=toupper(string2[offset+loop]);
-          }
-          else
-          {
+  for (loop2=0;loop2<numoffiles;loop2++) {
+    messagenum=1;
+    do {
+      sprintf(string,"%s%d",wordlisttoken[num],messagenum++);
+      error=_swix(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages[loop2],string,string2,64);
+      if (error==NULL) {
+        //Keep loading strings until no more '_'s are found
+        offset=0;
+        do {
+          flex_extend((flex_ptr)&wordlist[num],(wordlistlen[num]+1)*sizeof(STRING));
+          for (loop=0;string2[offset+loop]!='_' && string2[offset+loop]>=32;loop++) {
             wordlist[num][wordlistlen[num]].str[loop]=string2[offset+loop];
           }
-        }
-        wordlist[num][wordlistlen[num]].str[loop]=0;
-        wordlistlen[num]++;
-        offset+=loop+1;
-      } while (string2[offset-1]=='_');
-    }
-  } while (error==NULL);
+          wordlist[num][wordlistlen[num]].str[loop]=0;
+          wordlistlen[num]++;
+          offset+=loop+1;
+        } while (string2[offset-1]=='_');
+      }
+    } while (error==NULL);
+  }
 
   //Sort the words into order
   qsort((void *)wordlist[num],(size_t)wordlistlen[num],sizeof(STRING),comparewordlist);
+
+  //Remove any duplicate words (keeping shortest)
+  for (loop=wordlistlen[num]-1;loop>0;loop--) {
+    if (comparewordlist(&wordlist[num][loop],&wordlist[num][loop-1])==0) {
+      //Words are equal so find shortest and delete it
+      if (strlen(wordlist[num][loop].str)>strlen(wordlist[num][loop-1].str)) {
+        loop2=loop+1;
+      }
+      else
+      {
+        loop2=loop;
+      }
+      for (;loop2<wordlistlen[num];loop2++) {
+        wordlist[num][loop2-1]=wordlist[num][loop2];
+      }
+      wordlistlen[num]--;
+    }
+  }
   return 1;
 }
 
-int loadlists(void)
+//Loads lists from message files, numoffiles is the number of files to look in
+int loadlists(int numoffiles)
 {
-  int loop,offset,messagenum=1,equalpos,nextpos;
+  int loop,loop2,offset,messagenum,equalpos,nextpos;
   char string[8],string2[64];
   _kernel_oserror *error;
 
-  //Load all of the event names from messages file
-  loadeventlist(&messages,0);
-
-  //Load all of the words to replace from messages file
-  loadlist(0,"re");
-
-  //Load all of the words to ignore from messages file
-  loadlist(1,"ig");
-
-  //Load all of the verb endings from messages file
-  loadlist(2,"vb");
-
-  //Load all the thesaurus from messages file
-  loadlist(3,"th");
+  //Load all of the words
+  for (loop=0;loop<numofwordlists;loop++) {loadlist(loop,numoffiles);}
 
   //Now create the table saying which words are equivalent
   flex_alloc((flex_ptr)&thesauruslist,wordlistlen[3]*sizeof(int));
   for (loop=0;loop<wordlistlen[3];loop++) {thesauruslist[loop]=-1;}
 
-  do {
-    equalpos=wordlistlen[3];
-    sprintf(string,"th%d",messagenum++);
-    error=_swix(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages,string,string2,64);
-    if (error==NULL) {
-      offset=0;
-      do {
-        //Find positions of word in list
-        nextpos=findwordinlist(string2+offset,3,0);
+  for (loop2=0;loop2<numoffiles;loop2++) {
+    messagenum=1;
+    do {
+      equalpos=wordlistlen[3];
+      sprintf(string,"th%d",messagenum++);
+      error=_swix(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages[loop2],string,string2,64);
+      if (error==NULL) {
+        offset=0;
+        do {
+          //Find positions of word in list
+          nextpos=findwordinlist(string2+offset,3,1,31,31);
 
-        //If the equal word is unset or this word is lower than equal word
-        //set the equalpos to this word
-        if (nextpos<equalpos) {
-          //New word is lower in the list so need to set all words that
-          //are equal to equalpos equal to nextpos
-          for (loop=equalpos;loop<wordlistlen[3];loop++) {
-            if (thesauruslist[loop]==equalpos) {thesauruslist[loop]=nextpos;}
+          //Check if the word is already set equal to something
+          if (thesauruslist[nextpos]!=-1) {
+            if (thesauruslist[nextpos]<equalpos) {
+              //Need to reset equalpos to this new value
+              for (loop=equalpos;loop<wordlistlen[3];loop++) {
+                if (thesauruslist[loop]==equalpos) {thesauruslist[loop]=thesauruslist[nextpos];}
+              }
+              equalpos=thesauruslist[nextpos];
+            }
+            else
+            {
+              //Need to reset items to equalpos
+              for (loop=thesauruslist[nextpos]+1;loop<wordlistlen[3];loop++) {
+                if (thesauruslist[loop]==thesauruslist[nextpos]) {thesauruslist[loop]=equalpos;}
+              }
+              thesauruslist[nextpos]=equalpos;
+            }
           }
-          equalpos=nextpos;
-        }
-        
-        //Set the word that this word is equal to (lowest in list)
-        thesauruslist[nextpos]=equalpos;
+          else
+          {
+            //If the equal word is unset or this word is lower than equal word
+            //set the equalpos to this word
+            if (nextpos<equalpos) {
+              //New word is lower in the list so need to set all words that
+              //are equal to equalpos equal to nextpos
+              for (loop=equalpos;loop<wordlistlen[3];loop++) {
+                if (thesauruslist[loop]==equalpos) {thesauruslist[loop]=nextpos;}
+              }
+              equalpos=nextpos;
+            }
+            
+            //Set the word that this word is equal to (lowest in list)
+            thesauruslist[nextpos]=equalpos;
+          }
 
-        for (;string2[offset]!='_' && string2[offset]>=32;offset++) {}
-        offset++;
-      } while (string2[offset-1]=='_');
-    }
-  } while (error==NULL);
-
-  for (loop=0;loop<wordlistlen[3];loop++) {
-    fprintf(debug,"%20s : %s\n",wordlist[3][loop].str,wordlist[3][thesauruslist[loop]].str);
+          //Move to the next word
+          for (;string2[offset]!='_' && string2[offset]>=32;offset++) {}
+          offset++;
+        } while (string2[offset-1]=='_');
+      }
+    } while (error==NULL);
   }
   return 1;
 }
@@ -3506,18 +3985,18 @@ int main(int argc,char *argv[])
       0};
 
     int  event_code,loop,len;
-    int UTC[2];
-    char debug_filename[100];
+//    int UTC[2];
+//    char debug_filename[100];
     char string[8];
 
-    UTC[0]=3;
-    _swi(OS_Word,_IN(0)|_IN(1),14,UTC);
-    _swi(Territory_ConvertDateAndTime,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4),-1,UTC,debug_filename,100,"RAM::RamDisc0.$.%24%MI%SE%CS");
-    debug=fopen(debug_filename,"w");
-    if (debug==NULL) {
-      printf("Could not open debug file");
-      exit(0);
-    }
+//    UTC[0]=3;
+//    _swi(OS_Word,_IN(0)|_IN(1),14,UTC);
+//    _swi(Territory_ConvertDateAndTime,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4),-1,UTC,debug_filename,100,"RAM::RamDisc0.$.%24%MI%SE%CS");
+//    debug=fopen(debug_filename,"w");
+//    if (debug==NULL) {
+//      printf("Could not open debug file");
+//      exit(0);
+//    }
 
     //Copy data path into block so it cannot be corrupted by other copies
     len=_swi(OS_ReadVarVal,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_RETURN(2),"Today$Dir",todaypaths[0],256,0,0);
@@ -3526,7 +4005,7 @@ int main(int argc,char *argv[])
     flex_init("Today",0);
 
     //register ourselves with the Toolbox.
-    toolbox_initialise (0, WimpVersion, wimp_messages, toolbox_events, "<Today$Dir>",&messages, &id_block, &version, 0, (void **)&sprite_area);
+    toolbox_initialise (0, WimpVersion, wimp_messages, toolbox_events, "<Today$Dir>",&messages[0], &id_block, &version, 0, (void **)&sprite_area);
 
     //initialise the event library.
     event_initialise (&id_block);
@@ -3571,7 +4050,10 @@ int main(int argc,char *argv[])
       _swi(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages,string,monthnames[loop],4);
     }
 
-    loadlists();
+    //Load all of the event names from messages file
+    loadeventlist(&messages[0],0);
+  
+    loadlists(1);
 
     //Set size of screen data
     findfontwidths();
