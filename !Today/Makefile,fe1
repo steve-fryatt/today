@@ -1,0 +1,56 @@
+# Project:   Today
+
+
+# Toolflags:
+CCflags = -c -depend !Depend -IC: -throwback
+C++flags = -c -depend !Depend -IC: -throwback
+Linkflags = -aif -c++ -o $@
+ObjAsmflags = -throwback -NoCache -depend !Depend
+CMHGflags = 
+LibFileflags = -c -o $@
+Squeezeflags = -o $@
+
+
+# Final targets:
+@.!RunImage:   @.o.main @.^.^.^.AcornC_C++.Libraries.clib.o.Stubs \
+        @.^.^.^.AcornC_C++.Libraries.tboxlibs.o.toolboxlib @.^.^.^.AcornC_C++.Libraries.tboxlibs.o.wimplib \
+        @.^.^.^.AcornC_C++.Libraries.tboxlibs.o.eventlib @.^.^.^.AcornC_C++.Libraries.tboxlibs.o.renderlib \
+        @.^.^.^.AcornC_C++.Libraries.flexlib.o.flexlib 
+        Link $(Linkflags) @.o.main @.^.^.^.AcornC_C++.Libraries.clib.o.Stubs \
+        @.^.^.^.AcornC_C++.Libraries.tboxlibs.o.toolboxlib @.^.^.^.AcornC_C++.Libraries.tboxlibs.o.wimplib \
+        @.^.^.^.AcornC_C++.Libraries.tboxlibs.o.eventlib @.^.^.^.AcornC_C++.Libraries.tboxlibs.o.renderlib \
+        @.^.^.^.AcornC_C++.Libraries.flexlib.o.flexlib 
+
+
+# User-editable dependencies:
+
+
+# Static dependencies:
+@.o.main:   @.c.main
+        cc $(ccflags) -o @.o.main @.c.main 
+
+# Dynamic dependencies:
+o.main:	c.main
+o.main:	C:h.kernel
+o.main:	C:h.swis
+o.main:	h.flex
+o.main:	C:h.colourdbox
+o.main:	C:h.toolbox
+o.main:	C:h.wimp
+o.main:	C:h.window
+o.main:	C:h.gadgets
+o.main:	C:h.dcs
+o.main:	C:h.drawfile
+o.main:	C:h.event
+o.main:	C:h.fileinfo
+o.main:	C:h.fontmenu
+o.main:	C:h.iconbar
+o.main:	C:h.menu
+o.main:	C:h.printdbox
+o.main:	C:h.quit
+o.main:	C:h.saveas
+o.main:	C:h.scale
+o.main:	C:h.toolbox
+o.main:	C:h.wimp
+o.main:	C:h.wimplib
+o.main:	h.main

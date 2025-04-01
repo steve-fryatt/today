@@ -1,0 +1,2800 @@
+//Today - the revised version
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include "kernel.h"
+#include "swis.h"
+#include "flex.h"
+
+//Include the toolbox stuff
+#include "colourdbox.h"
+#include "dcs.h"
+#include "drawfile.h"
+#include "event.h"
+#include "fileinfo.h"
+#include "fontmenu.h"
+#include "iconbar.h"
+#include "menu.h"
+#include "printdbox.h"
+#include "quit.h"
+#include "saveas.h"
+#include "scale.h"
+#include "toolbox.h"
+#include "wimp.h"
+#include "wimplib.h"
+
+//Structure to hold data for a record
+typedef struct {
+  //If year is unknown_year it is unknown
+  //If month or day are 0 they match to all months/days
+  //If month or day are <0 they are unknown
+  //Code if 1-7 for days, 8 for continue and 0 otherwise
+  int year,month,day,type,code,startline,endline,fromown,textoff;
+} REC_DATA;
+
+//Structure to hold information for a list of records
+typedef struct {
+  ObjectId window,toolbar;
+  //listdates flag is nonzero if month and day are to be listed in window
+  int records,maxrecords,toolbarheight,listdates;
+  REC_DATA *recorddata;
+  //This block stores all the text for the window
+  char *text;
+  int curoff,maxoff;
+} WIN_DATA;
+
+//Structure to hold text strings
+typedef struct {
+  char str[32];
+} STRING;
+
+//Structure to hold text strings
+typedef struct {
+  STRING strings[2];
+} STRING_PAIR;
+
+#define WimpVersion    310
+#define recordstep 50
+#define recordlimit 500
+#define mintext 512
+#define textstep 512
+#define unknown_year -1000000
+static  WimpPollBlock  poll_block;
+static  IdBlock        id_block;
+int *sprite_area,version;
+char monthnames[13][4];
+static int daysinmonth[13]={0,31,29,31,30,31,30,31,31,30,31,30,31};
+static char monthfiles[13][4]={"own","jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"};
+MessagesFD messages;
+//FILE *debug;
+WIN_DATA scanwin,srchwin,addwin,editwin;
+STRING *eventtypes;
+STRING_PAIR *repwords;
+
+ObjectId iconbar_id,joinwindow,typemenu;
+ComponentId iconbar_component;
+
+int yearwidth,yeartextwidth,monthwidth,daywidth,daytextwidth,typewidth;
+int windowwidth,highlightstate=0,numoftypes=0,numofwords=0;
+int ignoretypes,ignoreyears;
+char todaypath[256];
+
+int scanday,scanmonth,scandayofweek;
+
+int srchmask,srchrange,srchcasesen,srchdone=0;
+int srchyear1,srchmonth1,srchday1,srchyear2,srchmonth2,srchday2;
+char srchstring[64];
+
+WIN_DATA *sortwin1,*sortwin2;
+
+//Lookup table of chars so punctuation is ignored and accents are removed
+const char lookup[256]={
+            0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
+            0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
+           ' ', 1 , 1 , 1 , 1 , 1 ,'&' , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 ,
+           '0','1','2','3','4','5','6','7','8','9', 1 , 1 , 1 , 1 , 1 , 1 ,
+            1 ,'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
+           'P','Q','R','S','T','U','V','W','X','Y','Z', 1 , 1 , 1 , 1 , 1 ,
+            1 ,'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
+           'P','Q','R','S','T','U','V','W','X','Y','Z', 1 , 1 , 1 , 1 , 1 ,
+            1 ,'W','W', 1 , 1 ,'Y','Y', 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 ,
+            1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 ,
+            1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 ,
+            1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 ,
+           'A','A','A','A','A','A', 1 ,'C','E','E','E','E','I','I','I','I',
+           'D','N','O','O','O','O','O', 1 ,'0','U','U','U','U','Y','P','S',
+           'A','A','A','A','A','A', 1 ,'C','E','E','E','E','I','I','I','I',
+           'D','N','O','O','O','O','O', 1 ,'0','U','U','U','U','Y','P','Y'};
+
+//Check if string1 starts with string2, returns 0 is it does not
+int checkwordmatch(char *string1,char *string2)
+{
+  int offset=0,char1,char2;
+  do {
+    char1=lookup[string1[offset]];
+    char2=string2[offset++];
+    //If char2 not terminator and char1 not equal char2 strings not same
+    if (char2>=32 && char1!=char2) {return 0;}
+  } while (char2>=32);
+  //If string2 has finished, it is only a match if char1 is a word terminator
+  //ie char1 is a punctuation character, control character or a space
+  if (char1>32) {return 0;}
+  return 1;
+}
+
+//Routine to move to the start of the next word in the string
+int movetonextword(char *string,int offset)
+{
+  while (lookup[string[offset]]==1 || lookup[string[offset]]==32) {offset++;}
+  return offset;
+}
+
+//Routine to move to the char after the end of the current word
+int movetoendofword(char *string,int offset)
+{
+  while (lookup[string[offset]]>1 && lookup[string[offset]]!=32) {offset++;}
+  return offset;
+}
+
+//Parse string by removing hard spaces, doubles/leading/trailing spaces
+//Also fix quote marks
+int parsestring(char *string)
+{
+  int offset1,offset2=0,offset3=0,nextchar,lastchar=32,counter=0,len,loop;
+  for (offset1=0;string[offset1]>=32;offset1++) {
+    nextchar=string[offset1];
+    switch (nextchar) {
+      case 32:
+      case 160:
+        //Only put spaces in if last was not a space
+        if (lastchar!=32) {
+          lastchar=string[offset2++]=32;
+        }
+        break;
+      case '"':
+      case '\'':
+      case '`':
+      case '´':
+      case '':
+      case '‘':
+      case '”':
+      case '•':
+        //Handle quotes
+        if (lastchar==32) {
+          nextchar='”';
+          counter++;
+        }
+        else
+        {
+          if (counter>0 && lookup[string[offset1+1]]<=32) {
+            nextchar='•';
+            counter--;
+          }
+          else
+          {
+            nextchar='‘';
+          }
+        }
+        lastchar=string[offset2++]=nextchar;
+        offset3=offset2;
+        break;
+      default:
+        //Copy all remaining characters as they are
+        lastchar=string[offset2++]=nextchar;
+        offset3=offset2;
+        break;
+    }
+  }
+  //Check for trailing '.'s
+  for (;offset3>0 && string[offset3-1]=='.';offset3--) {}
+  string[offset3++]=0;
+
+  //Scan through string looking for any initials with dots that need replacing
+  offset1=0;
+  while (string[offset1]>=32) {
+    offset1=movetonextword(string,offset1);
+    if (string[offset1]>=32) {
+      //Count the number of initials in the word
+      counter=0;
+      for (offset2=offset1;lookup[string[offset2]]>32 && string[offset2+1]=='.';offset2+=2) {counter++;}
+      if (counter>1 && lookup[string[offset2]]<=32) {
+        //Set of initials followed by punctuation, terminator or a space
+        offset2=offset1+2;
+        offset1++;
+        for (loop=1;loop<counter;loop++) {
+          string[offset1]=string[offset2];
+          offset1++;
+          offset2+=2;
+        }
+        memmove(string+offset1,string+offset2,strlen(string+offset2)+1);
+      }
+      else
+      {
+        offset1=movetoendofword(string,offset1);
+      }
+    }
+  }
+
+  //Now scan through the string for words that are to be replaced
+  offset1=0;
+  while (string[offset1]>=32) {
+    //Move to the start of the next word, ignoring punctuation and spaces
+    offset1=movetonextword(string,offset1);
+    if (string[offset1]>=32) {
+      //Have not reached the end of the string so check the word for a match
+      for (loop=0;loop<numofwords && checkwordmatch(string+offset1,repwords[loop].strings[0].str)==0;loop++) {}
+      if (loop<numofwords) {
+        //Have found a word in the string so replace it
+        //Find start of block after word
+        offset2=offset1+strlen(repwords[loop].strings[0].str);
+        //Find length of block
+        len=offset3-offset2;
+        //Find new start of block
+        offset3=offset1+strlen(repwords[loop].strings[1].str);
+        memmove(string+offset3,string+offset2,len);
+        offset3=offset3+len;
+        //Now copy the new word over the string
+        for (len=0;repwords[loop].strings[1].str[len]>=32;len++) {
+          string[offset1+len]=repwords[loop].strings[1].str[len];
+        }
+        offset1+=len;
+      }
+      else
+      {
+        //Does not match so Move to the end of this word
+        do {
+          offset1++;
+        } while (lookup[string[offset1]]>32);
+      }
+    }
+  }
+  return 1;
+}
+
+//Finds widths of strings for justification
+int findfontwidths(void)
+{
+  char text[8];
+  int loop,maxwidth,width,xeig,xpixels;
+  if (version>=350) {
+    sprintf(text,"9999");
+    yeartextwidth=_swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2)|_RETURN(0),1,text,0);
+    sprintf(text,"999BC");
+    width=_swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2)|_RETURN(0),1,text,0);
+    if (width>yeartextwidth) {yeartextwidth=width;}
+    yearwidth=yeartextwidth+16;
+    maxwidth=0;
+    for (loop=0;loop<=12;loop++) {
+      width=_swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2)|_RETURN(0),1,monthnames[loop],0);
+      if (width>maxwidth) {maxwidth=width;}
+    }
+    monthwidth=maxwidth+16;
+    sprintf(text,"99");
+    daytextwidth=_swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2)|_RETURN(0),1,text,0);
+    daywidth=daytextwidth+16;
+    maxwidth=0;
+    for (loop=0;loop<numoftypes;loop++) {
+      width=_swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2)|_RETURN(0),1,eventtypes[loop].str+2,0);
+      if (width>maxwidth) {maxwidth=width;}
+    }
+    typewidth=maxwidth+16;
+  }
+  else
+  {
+    yeartextwidth=5*16;
+    yearwidth=7*16;
+    monthwidth=0;
+    for (loop=0;loop<=12;loop++) {
+      width=strlen(monthnames[loop])*16;
+      if (width>monthwidth) {monthwidth=width;}
+    }
+    monthwidth+=16;
+    daytextwidth=2*16;
+    daywidth=4*16;
+    typewidth=0;
+    for (loop=0;loop<numoftypes;loop++) {
+      width=strlen(eventtypes[loop].str+2)*16;
+      if (width>typewidth) {typewidth=width;}
+    }
+    typewidth+=32;
+  }
+
+  //Check maximum width allowed for window
+  xpixels=_swi(OS_ReadModeVariable,_IN(0)|_IN(1)|_RETURN(2),-1,11)+1;
+  xeig=_swi(OS_ReadModeVariable,_IN(0)|_IN(1)|_RETURN(2),-1,4);
+  windowwidth=(xpixels<<xeig)-44;
+  return 1;
+}
+
+//Reports an error and then returns a NULL so that routines calling report error terminate correctly
+int reporterror(char *errortoken,char *str1)
+{
+  _kernel_oserror error;
+  _swi(Hourglass_Smash,0);
+  error.errnum=0;
+  _swi(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4),&messages,errortoken,error.errmess,252,str1);
+  _swi(Wimp_ReportError,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_IN(5),&error,2+4+(1<<8)+(2<<9),"Today",0,1,0);
+  return NULL;
+}
+
+//This code is called by a Wimp_Quit message, it forces an immediate quit
+int quit_message(WimpMessage *message,void *handle)
+{
+//  fclose(debug);
+  _swi(MessageTrans_CloseFile,_IN(0),&messages);
+  exit(0);
+  return 1;
+}
+
+//This code is called when the iconbar is selected
+int selectibar_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  toolbox_show_object(0,scanwin.window,0,0,iconbar_id,iconbar_component);
+  gadget_set_focus(0,scanwin.toolbar,3);
+  return 1;
+}
+
+//This code is called when the iconbar is adjusted
+int adjustibar_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  toolbox_show_object(0,srchwin.window,0,0,iconbar_id,iconbar_component);
+  gadget_set_focus(0,srchwin.toolbar,1);
+  return 1;
+}
+
+//This code finds the number in a number range (returning unknown if blank)
+int findnumber(ObjectId win,ComponentId ic,int unknown)
+{
+  int writeable,len,val;
+  char numstring[20];
+  numberrange_get_components(1,win,ic,&writeable,0,0,0);
+  writablefield_get_value(0,win,writeable,numstring,20,&len);
+  if (numstring[0]<32) {
+    val=unknown;
+  }
+  else
+  {
+    numberrange_get_value(0,win,ic,&val);
+  }
+  return val;
+}
+
+//This code is called when add event is selected in menu
+int openadd_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  int day,month,loop;
+  unsigned int state;
+
+  toolbox_get_object_state(0,addwin.window,&state);
+  if ((state&1)==0) {
+    //Add window is not currently open so set date to date of main window
+    stringset_get_selected(1,scanwin.toolbar,1,&month);
+    month++;
+    day=findnumber(scanwin.toolbar,3,0);
+    if (day==0) {day=1;}
+    stringset_set_selected(0,addwin.window,1,monthnames[month]);
+    numberrange_set_value(0,addwin.window,3,day);
+
+    //Clear all text in window
+    for (loop=34;loop<=38;loop++) {
+      writablefield_set_value(0,addwin.window,loop,"");
+    }
+  }
+  toolbox_show_object(0,addwin.window,0,0,iconbar_id,iconbar_component);
+  return 1;
+}
+
+//This code is called when clear text is selected
+int cleartext_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  int loop;
+  for (loop=34;loop<=38;loop++) {
+    writablefield_set_value(0,addwin.window,loop,"");
+  }
+  gadget_set_focus(0,addwin.window,34);
+  return 1;
+}
+
+//Make sure there is room for data
+//Stops when it reaches the maximum, but if maximum is -ve it doesn't
+//report an error message
+int makeroomfordata(WIN_DATA *window,int maximum) {
+  if (window->records==abs(maximum)) {
+    if (maximum>=0) {reporterror("e2",0);}
+    return NULL;
+  }
+  if (window->records==window->maxrecords) {
+    //Need more space for records so increase array
+    if (window->recorddata==NULL) {
+      if (flex_alloc((flex_ptr)&window->recorddata,(window->maxrecords+recordstep)*sizeof(REC_DATA))==0) {return reporterror("e1",0);}
+    }
+    else
+    {
+      if (flex_extend((flex_ptr)&window->recorddata,(window->maxrecords+recordstep)*sizeof(REC_DATA))==0) {return reporterror("e1",0);}
+    }
+    window->maxrecords+=recordstep;
+  }
+  if (window->maxoff-window->curoff<mintext) {
+    //Need more space for text so increase array
+    if (window->text==NULL) {
+      if (flex_alloc((flex_ptr)&window->text,(window->maxoff+textstep)*sizeof(char))==0) {return reporterror("e1",0);}
+    }
+    else
+    {
+      if (flex_extend((flex_ptr)&window->text,(window->maxoff+textstep)*sizeof(char))==0) {return reporterror("e1",0);}
+    }
+    window->maxoff+=textstep;
+  }
+  return 1;
+}
+
+//Saves a record to the file
+int saverecord(FILE *fileptr,REC_DATA *record,WIN_DATA *window)
+{
+  char header[11],*string;
+  int length=0,offset=0,offset2,termchar,wordlen;
+  //Build the header
+  header[0]=eventtypes[record->type].str[0];
+  if (record->month<=0) {
+    sprintf(header+1,"  ");
+  }
+  else
+  {
+    sprintf(header+1,"%02d",record->month);
+  }
+  if (record->day<=0) {
+    sprintf(header+3,"  ");
+  }
+  else
+  {
+    sprintf(header+3,"%02d",record->day);
+  }
+  if (record->year==unknown_year) {
+    sprintf(header+5,"    ");
+  }
+  else
+  {
+    sprintf(header+5,"%04d",record->year);
+  }
+  if (record->code>=1 && record->code<=7) {
+    sprintf(header+9,"%d",record->code);
+  }
+  else
+  {
+    sprintf(header+9," ");
+  }
+
+  //Now save all of the rows to the file
+  fprintf(fileptr,"%s",header);
+  string=window->text+record->textoff;
+  do {
+    //Find length of the next word
+    offset2=offset;
+    for (;string[offset]>32;offset++) {}
+    termchar=string[offset];
+    wordlen=offset-offset2;
+    if (length>0) {wordlen++;}
+    if (length+wordlen<=70) {
+      //Word will fit so save and move on
+      if (length>0) {fputc(32,fileptr);}
+      for (;offset2<offset;offset2++) {
+        fputc(string[offset2],fileptr);
+      }
+      length+=wordlen;
+      offset++;
+    }
+    else
+    {
+      //Need to break line
+      if (length>0) {
+        //Already have some text so terminate current and move on
+        fputc(10,fileptr);
+        header[9]='C';
+        fprintf(fileptr,"%s",header);
+        for (;offset2<offset;offset2++) {
+          fputc(string[offset2],fileptr);
+        }
+        length=wordlen-1;
+        offset++;
+      }
+      else
+      {
+        //Break word midway
+        for (offset=offset2;offset<offset2+70;offset++) {
+          fputc(string[offset],fileptr);
+        }
+        fputc(10,fileptr);
+        header[9]='C';
+        fprintf(fileptr,"%s",header);
+        length=0;
+        termchar=32;
+      }
+    }
+  } while (termchar>0);
+  fputc(10,fileptr);
+  return 1;
+}
+
+//This code moves the file ptr to the start of the next line
+int movetonextline(FILE *fileptr)
+{
+  int nextchar;
+  //Keep looping until either end of file or end of blanks and comments
+  do {
+    //Check next char
+    nextchar=fgetc(fileptr);
+    if (nextchar==EOF) {return 0;}
+    if (nextchar=='*') {
+      //Have found a comment so move to the end
+      do {
+        nextchar=fgetc(fileptr);
+        if (nextchar==EOF) {return 0;}
+      } while (nextchar>=32);
+    }
+  } while (nextchar<=32 || nextchar==160);
+
+  //Have now found a character that is not a comment line so put back
+  ungetc(nextchar,fileptr);
+  return 1;
+}
+
+//This code loads the header information for a record
+int loadheader(FILE *fileptr,REC_DATA *record)
+{
+  char header[10],typechar;
+  int loop,mult=1;
+
+  if (fread(header,sizeof(char),10,fileptr)==EOF) {return 0;}
+
+  //Check type
+  typechar=toupper(header[0]);
+  for (loop=0;loop<numoftypes && typechar!=eventtypes[loop].str[0];loop++) {}
+  if (loop<numoftypes) {
+    record->type=loop;
+  }
+  else
+  {
+    record->type=0;
+  }
+
+  //Check for hard spaces and errors in header
+  for (loop=1;loop<=8;loop++) {
+    if (header[loop]==160) {header[loop]=32;}
+  }
+
+  //Check month
+  if (header[1]==' ' && header[2]==' ') {
+    record->month=-1;
+  }
+  else
+  {
+    record->month=0;
+    if (header[1]!=' ') {record->month+=10*(header[1]-'0');}
+    if (header[2]!=' ') {record->month+=header[2]-'0';}
+  }
+
+  //Check day
+  if (header[3]==' ' && header[4]==' ') {
+    record->day=-1;
+  }
+  else
+  {
+    record->day=0;
+    if (header[3]!=' ') {record->day+=10*(header[3]-'0');}
+    if (header[4]!=' ') {record->day+=header[4]-'0';}
+  }
+
+  //Check year
+  if (header[5]==' ' && header[6]==' ' && header[7]==' ' && header[8]==' ') {
+    record->year=unknown_year;
+  }
+  else
+  {
+    record->year=0;
+    if (header[5]=='-') {
+      mult=-1;
+    }
+    else
+    {
+      if (header[5]!=' ') {record->year+=1000*(header[5]-'0');}
+    }
+    if (header[6]=='-') {
+      mult=-1;
+    }
+    else
+    {
+      if (header[6]!=' ') {record->year+=100*(header[6]-'0');}
+    }
+    if (header[7]=='-') {
+      mult=-1;
+    }
+    else
+    {
+      if (header[7]!=' ') {record->year+=10*(header[7]-'0');}
+    }
+    if (header[8]=='-') {
+      mult=-1;
+    }
+    else
+    {
+      if (header[8]!=' ') {record->year+=(header[8]-'0');}
+    }
+    record->year*=mult;
+  }
+
+  //Check type
+  if (header[9]>='1' && header[9]<='7') {
+    record->code=header[9]-'0';
+  }
+  else
+  {
+    if (header[9]=='C' || header[9]=='c') {
+      record->code=8;
+    }
+    else
+    {
+      record->code=0;
+    }
+  }
+
+  return 1;
+}
+
+
+//This code adds a record to the list of records for a window
+int addeventtolist(WIN_DATA *window)
+{
+  //Increment counters
+  window->records++;
+  //Increment offset to next string
+  window->curoff+=strlen(window->text+window->curoff)+1;
+  return 1;
+}
+
+//This code loads the next record from the file
+//Returns -ve if no record and 0 if an error
+int loadnextrecord(FILE *fileptr,WIN_DATA *window,int filenum,int maximum)
+{
+  int nextchar,offset,continuation;
+  REC_DATA *record,record2;
+
+  if (makeroomfordata(window,maximum)==NULL) {return NULL;}
+  
+  //Move to start of line and leave if nothing left in file
+  if (movetonextline(fileptr)==0) {return -1;}
+
+  //Load and process the header
+  record=&window->recorddata[window->records];
+  if (loadheader(fileptr,record)==0) {return -1;}
+
+  //Load the string
+  record->textoff=offset=window->curoff;
+  do {
+    nextchar=fgetc(fileptr);
+    if (nextchar!=EOF && nextchar>=32) {window->text[offset++]=nextchar;}
+  } while (nextchar!=EOF && nextchar>=32);
+  window->text[offset++]=0;
+
+  //Check for any continuations
+  do {
+    continuation=0;
+    //Move to start of line and leave if nothing left in file
+    if (movetonextline(fileptr)!=0) {
+      //Load and process the header
+      if (loadheader(fileptr,&record2)!=0) {
+        if (record2.code==8 && record2.type==record->type  && record2.year==record->year && record2.month==record->month && record2.day==record->day) {
+          //Line is a contination of previous line so add text to previous
+          continuation=1;
+          offset--;
+          window->text[offset++]=' ';
+          do {
+            nextchar=fgetc(fileptr);
+            if (nextchar!=EOF && nextchar>=32) {window->text[offset++]=nextchar;}
+          } while (nextchar!=EOF && nextchar>=32);
+          window->text[offset++]=0;
+        }
+        else
+        {
+          //Not a continue so move to before the header
+          fseek(fileptr,-10,SEEK_CUR);
+        }
+      }
+    }
+  } while (continuation==1);
+  parsestring(window->text+record->textoff);
+
+  //Check that the events have years and reminders do not
+  if (record->type==1 && record->year==unknown_year) {record->type=2;}
+  if (record->type==2 && record->year!=unknown_year) {record->type=1;}
+
+  //Set flag for own file
+  record->fromown=(filenum==0);
+  return 1;
+}
+
+//Loads all events from a file
+int loadallevents(WIN_DATA *joindata,char *path,int filenum)
+{
+  char filename[256];
+  FILE *fileptr;
+  int recresult;
+
+  sprintf(filename,"%s.TodayData.%s",path,monthfiles[filenum]);
+  fileptr=fopen(filename,"rb");
+  if (fileptr==NULL) {return reporterror("e4",filename);}
+
+  //Now cycle through loading records
+  do {
+    recresult=loadnextrecord(fileptr,joindata,filenum,0x7fffffff);
+    if (recresult==0) {
+      fclose(fileptr);
+      return 0;
+    }
+    if (recresult>0) {addeventtolist(joindata);}
+  } while (recresult>0);
+  fclose(fileptr);
+  return 1;
+}
+
+//Save all events to a file
+int saveallevents(WIN_DATA *joindata,char *path,int filenum)
+{
+  char filename[256];
+  int loop,loop2;
+  FILE *fileptr;
+  
+  sprintf(filename,"%s.TodayData.%s",path,monthfiles[filenum]);
+  fileptr=fopen(filename,"w");
+  if (fileptr==NULL) {return reporterror("e3",filename);}
+  loop2=0;
+  loop=1;
+  if (joindata->records>0 && joindata->recorddata[0].type==0) {loop=0;}
+  for (;loop<numoftypes;loop++) {
+    fprintf(fileptr,"*-------- ------------------------------------------------------------\n");
+    fprintf(fileptr,"*mmddyyyy %s\n",eventtypes[loop].str+2);
+    fprintf(fileptr,"*-------- ------------------------------------------------------------\n");
+    for(;loop2<joindata->records && joindata->recorddata[loop2].type<=loop;loop2++) {
+      saverecord(fileptr,&joindata->recorddata[loop2],joindata);
+    }
+  }
+  if (loop2<joindata->records) {
+    fprintf(fileptr,"*-------- ------------------------------------------------------------\n");
+    fprintf(fileptr,"*mmddyyyy Unsorted\n");
+    fprintf(fileptr,"*-------- ------------------------------------------------------------\n");
+    for(;loop2<joindata->records;loop2++) {
+      saverecord(fileptr,&joindata->recorddata[loop2],joindata);
+    }
+  }
+  fclose(fileptr);
+  return 1;
+}
+
+//Rountine to test words at start of strings are same
+int comparewords(char *str1,char *str2) {
+  int off1=0,off2=0,c1,c2;
+  do {
+    c1=lookup[str1[off1++]];
+    c2=lookup[str2[off2++]];
+    if (c1<=32) {
+      if (c2<=32) {
+        //Both finished so words are equal
+        return 0;
+      }
+      else
+      {
+        //Word2 is longer so str2 is greater
+        return -2;
+      }
+    }
+    if (c2<=32) {
+      //Word1 is longer so str1 is greater
+      return 2;
+    }
+    if (c1>c2) {return 2;}
+    if (c1<c2) {return -2;}
+  } while (1);
+  return 0;
+}
+
+//Test to see if string 1 is inside string 2
+int comparestrings(char *string1,char *string2)
+{
+  int offset1=0,offset2=0,char1,char2,result=0,result2;
+  do {
+    //Move to the next word of each string
+    offset1=movetonextword(string1,offset1);
+    offset2=movetonextword(string2,offset2);
+
+    //Check if either string has finished
+    char1=lookup[string1[offset1]];
+    char2=lookup[string2[offset2]];
+    if (char1<32) {
+      //Have reached end of first string so see if end of other
+      if (char2>=32 || result!=0) {
+        //Strings are equal but string2 is longer
+        return -1;
+      }
+      else
+      {
+        return 0;
+      }
+    }
+    if (char2<32) {
+      //String1 does not fit into string2
+      if (result!=0) {
+        //Failed earlier so return earlier result;
+        return result;
+      }
+      else
+      {
+        //This is first failure, so string1 is greater
+        return 2;
+      }
+    }
+
+    //Now check if the words in string1 and string2 are the same
+    result2=comparewords(string1+offset1,string2+offset2);
+    if (result2!=0) {
+      //Words do not match, if first error record it
+      if (result==0) {result=result2;}
+      do {
+        //Keep scanning through string2 until word matches or end of string
+        offset2=movetoendofword(string2,offset2);
+        offset2=movetonextword(string2,offset2);
+        if (string2[offset2]>=32) {
+          //Check word against next word in string2
+          result2=comparewords(string1+offset1,string2+offset2);
+        }
+      } while (string2[offset2]>=32 && result2!=0);
+      if (result2!=0) {return result;}
+    }
+    offset1=movetoendofword(string1,offset1);
+    offset2=movetoendofword(string2,offset2);
+  } while (1);
+  return 0;
+}
+
+//Routine to compare records for the join sort
+int joincompare(const void *e1,const void *e2)
+{
+  REC_DATA *r1,*r2;
+  int result;
+  r1=(REC_DATA *)e1;
+  r2=(REC_DATA *)e2;
+
+  if (ignoretypes==0) {
+    if (r1->type>r2->type) {return 2;}
+    if (r1->type<r2->type) {return -2;}
+  }
+  if (ignoreyears==0) {
+    if (r1->year>r2->year) {return 2;}
+    if (r1->year<r2->year) {return -2;}
+  }
+  if (r1->month>r2->month) {return 2;}
+  if (r1->month<r2->month) {return -2;}
+  if (r1->day>r2->day) {return 2;}
+  if (r1->day<r2->day) {return -2;}
+  if (r1->code>r2->code) {return 2;}
+  if (r1->code<r2->code) {return -2;}
+
+  //See if string 1 is inside string 2
+  result=comparestrings(sortwin1->text+r1->textoff,sortwin2->text+r2->textoff);
+  if (result>=-1 && result<=1) {return result;}
+  //String 1 not in string 2 so see if string 2 is in string 1
+  return -comparestrings(sortwin2->text+r2->textoff,sortwin1->text+r1->textoff);
+}
+
+//Sets the size of the window and justifies any text
+//Only reopens if reopen is non-zero
+int justifywindow(WIN_DATA *window,int reopen)
+{
+  int loop,offset,lines=0,block[25],textwidth,charwidth,spaceoffset,width;
+  unsigned int state;
+  char *string;
+  BBox extent;
+
+  textwidth=windowwidth-16-yearwidth-typewidth;
+  if (window->listdates!=0) {textwidth-=daywidth+monthwidth;}
+  charwidth=textwidth/16;
+  //Fix 'just in case'
+  if (charwidth<1) {charwidth=1;}
+
+  //Justify each of the lines
+  for (loop=0;loop<window->records;loop++) {
+    //Remove line breaks
+    string=window->text+window->recorddata[loop].textoff;
+    for (offset=0;string[offset]!=0;offset++) {
+      if (string[offset]==13) {string[offset]=32;}
+    }
+
+    window->recorddata[loop].startline=lines;
+    lines++;
+    if (version>=350) {
+      //Keep breaking until end reached
+      do {
+        spaceoffset=0;
+        offset=-1;
+        //Move through words until find word too long
+        do {
+          //Move to end of word
+          for (offset++;string[offset]>32;offset++) {}
+          width=_swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2)|_RETURN(0),1,string,offset);
+          if (width<=textwidth) {spaceoffset=offset;}
+        } while (width<=textwidth && string[offset]>=32);
+
+        //If no space, find first space
+        if (spaceoffset==0) {
+          for (spaceoffset=offset;string[spaceoffset]>32;spaceoffset++) {}
+          offset=spaceoffset;
+        }
+
+        //If wrapped, break at string
+        if (width>textwidth) {
+          //Need to break line, break at last space
+          string[spaceoffset]=13;
+          string+=spaceoffset+1;
+          offset=0;
+          lines++;
+        }
+      } while (string[offset]!=0);
+    }
+    else
+    {
+      //Keep breaking until end reached
+      do {
+        spaceoffset=0;
+        for (offset=0;string[offset]!=0 && offset<charwidth;offset++) {
+          if (string[offset]==32) {spaceoffset=offset;}
+        }
+
+        //If no space, find first space
+        if (spaceoffset==0) {
+          for (spaceoffset=offset;string[spaceoffset]>32;spaceoffset++) {}
+          offset=spaceoffset;
+        }
+
+        if (offset>=charwidth) {
+          //Need to break line, break at last space
+          string[spaceoffset]=13;
+          string+=spaceoffset+1;
+          offset=0;
+          lines++;
+        }
+      } while (string[offset]!=0);
+    }
+    window->recorddata[loop].endline=lines-1;
+  }
+
+  //Set extent of window
+  extent.xmin=extent.ymax=0;
+  extent.xmax=windowwidth;
+  extent.ymin=-window->toolbarheight;
+  //window_set_extent(0,window->toolbar,&extent);
+  if (lines>0) {extent.ymin-=8+40*lines;}
+  window_set_extent(0,window->window,&extent);
+
+  //Redraw the window if open
+  if (reopen!=0) {
+    toolbox_get_object_state(0,window->window,&state);
+    if ((state&1)!=0) {
+      window_get_wimp_handle(0,window->window,&block[0]);
+      _swi(Wimp_GetWindowState,_IN(1),block);
+      toolbox_show_object(0,window->window,1,&block[1],iconbar_id,iconbar_component);
+      //Move minimum down to cope with case of zero entries left in window
+      extent.ymin-=100;
+      window_force_redraw(0,window->window,&extent);
+    }
+  }
+  return 1;
+}
+
+//Tests if the record is on the correct date, returns 1 if it is
+int testifcorrectdate(REC_DATA *record)
+{
+  if (record->month>0 && record->month!=scanmonth) {return 0;} 
+  if (record->day>0 && record->day!=scanday) {return 0;}
+  if (record->code!=0 && record->code!=scandayofweek) {return 0;}
+  return 1;
+}
+
+//Reads the next non-punctuation character
+int readnextchar(char *string,int *offset)
+{
+  int c;
+  //Keep loading chars until it is not a punctuation character
+  do {
+    c=string[(*offset)++];
+    //Use lookup table to convert to upper case and remove all punctuation
+    c=lookup[c];
+  } while (c==1);
+  return c;
+}
+
+//Routine to compare records for the sort
+int comparerecords(const void *e1,const void *e2)
+{
+  REC_DATA *r1,*r2;
+  int offset,offset2,char1,char2;
+  r1=(REC_DATA *)e1;
+  r2=(REC_DATA *)e2;
+
+  if (r1->year>r2->year) {return 1;}
+  if (r1->year<r2->year) {return -1;}
+  if (r1->month>r2->month) {return 1;}
+  if (r1->month<r2->month) {return -1;}
+  if (r1->day>r2->day) {return 1;}
+  if (r1->day<r2->day) {return -1;}
+  if (r1->type>r2->type) {return 1;}
+  if (r1->type<r2->type) {return -1;}
+  if (r1->code>r2->code) {return 1;}
+  if (r1->code<r2->code) {return -1;}
+
+  offset=r1->textoff;
+  offset2=r2->textoff;
+  for (;sortwin1->text[offset]>=32 || sortwin2->text[offset2]>=32;) {
+    char1=readnextchar(sortwin1->text,&offset);
+    char2=readnextchar(sortwin2->text,&offset2);
+    if (char1<char2) {return -1;}
+    if (char1>char2) {return 1;}
+  }
+  return 0;
+}
+
+//Code checks for match between strings
+//Returns non-zero if a match
+int wildcardmatch(char *str1,char *str2,int casesen)
+{
+  int off1=0,off2,char1,char2;
+
+  //Run through possible starts to string
+  for (;;off1++) {
+    //Run through second string
+    for (off2=0;;off2++) {
+      char1=str1[off1+off2];
+      if (casesen==0) {char1=toupper(char1);}
+      char2=str2[off2];
+      //if character in wildcard is a '*' call recursively
+      if(char2=='*') {return wildcardmatch(str1+off1+off2,str2+off2+1,casesen);}
+      //if str2 has finished then must be a match
+      if (char2<32) {return 1;}
+      //if str1 has finished then cannot be a match
+      if (char1<32) {return 0;}
+      //if characters do not match then stop
+      if (char2!='?' && char1!=char2) {break;}
+    }
+  }
+  return 0;
+}
+
+//Checks if an event is in the correct range
+//Returns non-zero if it is in range
+int recinrange(REC_DATA *record,int year1,int month1,int day1,int year2,int month2,int day2)
+{
+  //If year is unknown count as a match
+  if (record->year==unknown_year) {return 1;}
+  //If year is outside range, set as not match
+  if (record->year<year1 || record->year>year2) {return 0;}
+
+  //Check if before start of range
+  if (record->year==year1) {
+    //If month unknown count as a match
+    if (record->month<=0) {return 1;}
+    //If month too soon, not a match
+    if (record->month<month1) {return 0;}
+    if (record->month==month1) {
+      //If day unknown count as a match
+      if (record->day<=0) {return 1;}
+      //If day too soon, not a match
+      if (record->day<day1) {return 0;}
+    }
+  }
+
+  //Check if after end of range
+  if (record->year==year2) {
+    //If month unknown count as a match
+    if (record->month<=0) {return 1;}
+    //If month too late, not a match
+    if (record->month>month2) {return 0;}
+    if (record->month==month2) {
+      //If day unknown count as a match
+      if (record->day<=0) {return 1;}
+      //If day too late, not a match
+      if (record->day>day2) {return 0;}
+    }
+  }
+  return 1;
+}
+
+//Check if an event matches the search
+int searchmatch(WIN_DATA *win,REC_DATA *record)
+{
+  if ((srchmask&(1<<record->type))==0) {return 0;}
+  if (srchrange!=0 && recinrange(record,srchyear1,srchmonth1,srchday1,srchyear2,srchmonth2,srchday2)==0) {return 0;}
+  if (wildcardmatch(win->text+record->textoff,srchstring,srchcasesen)==0) {return 0;}
+  return 1;
+}
+
+//Routine to perform editing on data files
+//If bit 0 is set a delete is performed, if bit 1 an add is performed 
+int editevent(WIN_DATA *win,int flags)
+{
+  int curfile=-1,loop,offset,offset2,nextfile,state,onradio,month;
+  int updatescan=0,updatesearch=0;
+  char newtext[400];
+  _swi(Hourglass_On,0);
+  if ((flags&2)!=0) {
+    //Build the new text string first to see if there is going to be a problem
+    offset=0;
+    for (loop=0x22;loop<=0x26;loop++) {
+      writablefield_get_value(0,win->window,loop,newtext+offset,400,&state);
+      offset+=state-1;
+      newtext[offset++]=' ';
+    }
+    newtext[offset++]=0;
+    parsestring(newtext);
+    if (newtext[0]<32) {
+      if (win->recorddata!=NULL) {flex_free((flex_ptr)&win->recorddata);}
+      if (win->text!=NULL) {flex_free((flex_ptr)&win->text);}
+      return reporterror("e5",0);
+    }
+  }
+
+  if ((flags&1)!=0) {
+    //Check to see if the event being deleted is in either of the windows
+    sortwin1=win;
+    sortwin2=&scanwin;
+    for (loop=0;loop<sortwin2->records && joincompare(&sortwin1->recorddata[0],&sortwin2->recorddata[loop])!=0;loop++) {}
+    if (loop<sortwin2->records) {
+      //Found a match so delete it
+      updatescan=1;
+      for (loop++;loop<sortwin2->records;loop++) {
+        sortwin2->recorddata[loop-1]=sortwin2->recorddata[loop];
+      }
+      sortwin2->records--;
+    }
+    sortwin2=&srchwin;
+    for (loop=0;loop<sortwin2->records && joincompare(&sortwin1->recorddata[0],&sortwin2->recorddata[loop])!=0;loop++) {}
+    if (loop<sortwin2->records) {
+      //Found a match so delete it
+      updatesearch=1;
+      for (loop++;loop<sortwin2->records;loop++) {
+        sortwin2->recorddata[loop-1]=sortwin2->recorddata[loop];
+      }
+      sortwin2->records--;
+    }
+
+    //Perform delete, load all of the data into the win
+    if (win->recorddata[0].fromown==0) {
+      //Save to month file
+      curfile=win->recorddata[0].month;
+    }
+    else
+    {
+      //Save to own file
+      curfile=0;
+    }
+    if (loadallevents(win,todaypath,curfile)==0) {
+      //Error so lose all data
+      if (win->text!=NULL) {flex_free((flex_ptr)&win->text);}
+      if (win->recorddata!=NULL) {flex_free((flex_ptr)&win->recorddata);}
+      return 1;
+    }
+
+    //Now scan for exact matches to data and remove duplicate and initial
+    sortwin1=sortwin2=win;
+    for (loop=1;loop<win->records && joincompare(&win->recorddata[0],&win->recorddata[loop])!=0;loop++) {}
+    offset=0;
+    for (offset2=1;offset2<win->records;offset2++) {
+      if (offset2!=loop) {
+        win->recorddata[offset++]=win->recorddata[offset2];
+      }
+    }
+    if (loop<win->records) {
+      win->records-=2;
+    }
+    else
+    {
+      win->records--;
+    }
+  }
+
+  if ((flags&2)!=0) {
+    //Peform add
+    radiobutton_get_state(0,win->window,0x1a,&state,&onradio);
+    stringset_get_selected(1,win->window,1,&month);
+    month++;
+    if (state!=0) {
+      //Save to month file
+      nextfile=month;
+    }
+    else
+    {
+      //Save to own file
+      nextfile=0;
+    }
+    if (curfile!=nextfile) {
+      if (curfile!=-1) {saveallevents(win,todaypath,curfile);}
+      curfile=nextfile;
+      win->records=win->maxrecords=0;
+      win->curoff=win->maxoff=0;
+      if (loadallevents(win,todaypath,curfile)==0) {
+        //Error so lose all data
+        if (win->text!=NULL) {flex_free((flex_ptr)&win->text);}
+        if (win->recorddata!=NULL) {flex_free((flex_ptr)&win->recorddata);}
+        return 1;
+      }
+    }
+
+    //Add the new event and sort into order
+    if (makeroomfordata(win,recordlimit)==NULL) {
+      if (win->recorddata!=NULL) {flex_free((flex_ptr)&win->recorddata);}
+      if (win->text!=NULL) {flex_free((flex_ptr)&win->text);}
+      return NULL;
+    }
+
+    //Read data for the event into memory block
+    win->recorddata[win->records].year=findnumber(win->window,19,unknown_year);
+    win->recorddata[win->records].month=month;
+    win->recorddata[win->records].day=findnumber(win->window,3,0);
+    stringset_get_selected(1,win->window,0x28,&win->recorddata[win->records].type);
+    win->recorddata[win->records].type++;
+    win->recorddata[win->records].fromown=(curfile==0);
+  
+    //Check that the events have years and reminders do not
+    if (win->recorddata[win->records].type==1 && win->recorddata[win->records].year==unknown_year) {win->recorddata[win->records].type=2;}
+    if (win->recorddata[win->records].type==2 && win->recorddata[win->records].year!=unknown_year) {win->recorddata[win->records].type=1;}
+  
+    stringset_get_selected(1,win->window,29,&win->recorddata[win->records].code);
+    win->recorddata[win->records].textoff=win->curoff;
+    sprintf(win->text+win->curoff,"%s",newtext);
+    addeventtolist(win);
+
+    //Check if the new event needs to be added to the scan window
+    if (testifcorrectdate(&win->recorddata[win->records-1])!=0) {
+      //Add to the window and sort the contents
+      if (makeroomfordata(&scanwin,-recordlimit)!=NULL) {
+        scanwin.recorddata[scanwin.records]=win->recorddata[win->records-1];
+        scanwin.recorddata[scanwin.records].textoff=scanwin.curoff;
+        sprintf(scanwin.text+scanwin.curoff,"%s",newtext);
+        addeventtolist(&scanwin);
+        updatescan=1;
+
+        //Sort the events
+        sortwin1=sortwin2=&scanwin;
+        qsort((void *)scanwin.recorddata,(size_t)scanwin.records,sizeof(REC_DATA),comparerecords);
+      }
+    }
+
+    //Check if the new event needs to be added to the srch window
+    if (srchdone!=0 && searchmatch(win,&win->recorddata[win->records-1])!=0) {
+      //Add to the window and sort the contents
+      if (makeroomfordata(&srchwin,-recordlimit)!=NULL) {
+        srchwin.recorddata[srchwin.records]=win->recorddata[win->records-1];
+        srchwin.recorddata[srchwin.records].textoff=srchwin.curoff;
+        sprintf(srchwin.text+srchwin.curoff,"%s",newtext);
+        addeventtolist(&srchwin);
+        updatesearch=1;
+
+        //Sort the events
+        sortwin1=sortwin2=&srchwin;
+        qsort((void *)srchwin.recorddata,(size_t)srchwin.records,sizeof(REC_DATA),comparerecords);
+      }
+    }
+
+    //Sort all of the data into type and date order
+    sortwin1=sortwin2=win;
+    ignoretypes=ignoreyears=0;
+    qsort((void *)win->recorddata,(size_t)win->records,sizeof(REC_DATA),joincompare);
+  }
+
+  //Save the final output file and clear memory
+  if (curfile!=-1) {saveallevents(win,todaypath,curfile);}
+  if (win->text!=NULL) {flex_free((flex_ptr)&win->text);}
+  if (win->recorddata!=NULL) {flex_free((flex_ptr)&win->recorddata);}
+
+  //Update other windows if needed
+  if (updatescan!=0) {
+    sprintf(newtext,"%d",scanwin.records);
+    displayfield_set_value(0,scanwin.toolbar,14,newtext);
+    justifywindow(&scanwin,1);
+  }
+  if (updatesearch!=0) {
+    sprintf(newtext,"%d",srchwin.records);
+    displayfield_set_value(0,srchwin.toolbar,14,newtext);
+    justifywindow(&srchwin,1);
+  }
+  _swi(Hourglass_Off,0);
+  return 1;
+}
+
+//This code is called when add event is selected
+int addnew_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  int loop,block[10],code;
+  ObjectId tool_win;
+  ComponentId tool_icon;
+
+  //Initialise add window and perform the add
+  if (editevent(&addwin,2)==NULL) {return NULL;}
+
+  //If the event was not on a special day, clear text from window
+  stringset_get_selected(1,addwin.window,29,&code);
+  if (code==0) {
+    for (loop=34;loop<=38;loop++) {
+      writablefield_set_value(0,addwin.window,loop,"");
+    }
+  }
+
+  //Move to first icon of text if in text icons
+  _swi(Wimp_GetCaretPosition,_IN(1),block);
+  window_wimp_to_toolbox(0,block[0],block[1],&tool_win,&tool_icon);
+  if (tool_win==addwin.window && tool_icon>=34 && tool_icon<=38) {
+    gadget_set_focus(0,addwin.window,34);
+  }
+  return 1;
+}
+
+//This code is called when delete is selected
+int delete_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  _kernel_oserror error;
+
+  //First check if delete is really wanted
+  error.errnum=0;
+  _swi(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages,"e7",error.errmess,252);
+  if (_swi(Wimp_ReportError,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_IN(5)|_RETURN(1),&error,1+2+4+(1<<8)+(4<<9),"Today",0,1,0)==2) {return 1;}
+  
+  //Call routine to delete event in editwin and not add a new event
+  editevent(&editwin,1);
+  toolbox_hide_object(0,editwin.window);
+  return 1;
+}
+
+//This code is called when edit is selected
+int edit_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  //Call routine to delete event and add a new event
+  editevent(&editwin,3);
+  toolbox_hide_object(0,editwin.window);
+  return 1;
+}
+
+//This code is called when an item in the type list is selected
+int altertypes_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  int tick;
+  menu_get_tick(0,id_block->self_id,id_block->self_component,&tick);
+  tick=1-(tick==1);
+  menu_set_tick(0,id_block->self_id,id_block->self_component,tick);
+  return 1;
+}
+
+//This code is called when quit is selected on the menu
+int menuquit_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+//  fclose(debug);
+  _swi(MessageTrans_CloseFile,_IN(0),&messages);
+  exit(0);
+  return 1;
+}
+
+//Fix toolbar to window
+int fixtoolbar(WIN_DATA *win,char *toolname)
+{
+  ObjectTemplateHeader *objheader;
+  WindowTemplate *wintemp;
+
+  //Load toolbar data and copy to a block so it can be edited
+  toolbox_template_lookup(0,toolname,(void *)&objheader);
+
+  //Find height of toolbar and set width as huge
+  wintemp=objheader->body;
+  win->toolbarheight=wintemp->window.visible_area.ymax-wintemp->window.visible_area.ymin;
+  wintemp->window.visible_area.xmax=wintemp->window.visible_area.xmin+100000;
+  
+  //Create toolbar window and set as a toolbar
+  toolbox_create_object(1,objheader,&win->toolbar);
+  window_set_tool_bars(2,win->window,0,win->toolbar,0,0);
+  return 1;
+}
+
+//This code initialises a record window
+int createrecwindow(char *winname,char *toolname,WIN_DATA *win)
+{
+  //Create main window
+  toolbox_create_object(0,winname,&win->window);
+
+  //Add the toolbar
+  fixtoolbar(win,toolname);
+
+  //Set as no record data present
+  win->records=win->maxrecords=0;
+  win->recorddata=NULL;
+  win->text=NULL;
+  win->curoff=win->maxoff=0;
+  return 1;
+}
+
+//This code is called when the month is changed in the scan window
+int stringchanged_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  int month;
+  stringset_get_selected(1,id_block->self_id,id_block->self_component,&month);
+  numberrange_set_bounds(2,id_block->self_id,id_block->self_component+2,0,daysinmonth[month+1],0,0);
+  return 1;
+}
+
+//This code sets the date in the window to today
+int settocurrentdate(ObjectId window,ComponentId day,ComponentId month,ComponentId year)
+{
+  int UTC[2],ordinals[10];
+
+  //Read time
+  UTC[0]=3;
+  _swi(OS_Word,_IN(0)|_IN(1),14,UTC);
+  _swi(Territory_ConvertTimeToOrdinals,_IN(0)|_IN(1)|_IN(2),-1,UTC,ordinals);
+
+  //Now setup the window
+  stringset_set_selected(0,window,month,monthnames[ordinals[5]]);
+  numberrange_set_value(0,window,day,ordinals[4]);
+  if (year>0) {numberrange_set_value(0,window,year,ordinals[6]);}
+  return 1;
+}
+
+//This code scans a file
+int scanfile(int filenum)
+{
+  FILE *fileptr;
+  char filename[256];
+  int recresult;
+  
+  //Open the file
+  sprintf(filename,"%s.TodayData.%s",todaypath,monthfiles[filenum]);
+  fileptr=fopen(filename,"rb");
+  if (fileptr==NULL) {return reporterror("e4",filename);}
+
+  //Now cycle through loading records
+  do {
+    recresult=loadnextrecord(fileptr,&scanwin,filenum,recordlimit);
+    if (recresult==0) {
+      fclose(fileptr);
+      return 0;
+    }
+    if (recresult>0) {
+      //Found a record so deal with it
+      if (testifcorrectdate(&scanwin.recorddata[scanwin.records])!=0) {
+        //Event is on the correct day to add to window list
+        addeventtolist(&scanwin);
+      }
+    }
+  } while (recresult>0);
+  fclose(fileptr);
+  return 1;
+}
+
+//This code is called when a file is dragged to !Today
+int draggingjoinfile_message(WimpMessage *message,void *handle)
+{
+  ObjectId self_id;
+  ComponentId self_component;
+  char filename[256];
+  int type;
+  unsigned int flags;
+
+  window_wimp_to_toolbox(0,message->data.data_load.destination_window,message->data.data_load.destination_icon,&self_id,&self_component);
+  if (self_id==joinwindow) {
+    //Look to see if dragged item contains a directory 'TodayData'
+    sprintf(filename,"%s.TodayData",message->data.data_load.leaf_name);
+    type=_swi(OS_File,_IN(0)|_IN(1)|_RETURN(0),17,filename);
+    if (type==2 || type==3) {
+      //Only copy path if it contains data
+      displayfield_set_value(0,joinwindow,4,message->data.data_load.leaf_name);
+      gadget_get_flags(0,joinwindow,5,&flags);
+      flags&=~0x80000000;
+      gadget_set_flags(0,joinwindow,5,flags);
+    }
+  }
+
+  
+  return 1;
+}
+
+//This code is called when font is changed
+int fontchange_message(WimpMessage *message,void *handle)
+{
+  findfontwidths();
+  justifywindow(&scanwin,1);
+  justifywindow(&srchwin,1);
+  return 1;
+}
+
+//This code is called when mode is changed
+int modechange_message(WimpMessage *message,void *handle)
+{
+  findfontwidths();
+  //fixtoolbar(&scanwin,"ScanTool");
+  //fixtoolbar(&srchwin,"SrchTool");
+  justifywindow(&scanwin,0);
+  justifywindow(&srchwin,0);
+  return 1;
+}
+
+//Find day of the week, long winded way but should work
+int finddayofweek(int day,int month)
+{
+  int ordinals[10],UTC[2];
+  //Finds time, converts to ordinals, alters month and day
+  //Finds UTC time and converts back to ordinals to get day of week
+  UTC[0]=3;
+  _swi(OS_Word,_IN(0)|_IN(1),14,UTC);
+  _swi(Territory_ConvertTimeToOrdinals,_IN(0)|_IN(1)|_IN(2),-1,UTC,ordinals);
+  ordinals[4]=day;
+  ordinals[5]=month;
+  _swi(Territory_ConvertOrdinalsToTime,_IN(0)|_IN(1)|_IN(2),-1,UTC,ordinals);
+  _swi(Territory_ConvertTimeToOrdinals,_IN(0)|_IN(1)|_IN(2),-1,UTC,ordinals);
+  return ordinals[7];
+}
+
+//This code does a scan of the current date
+int beginscan(void)
+{
+  char text[12];
+
+  _swi(Hourglass_On,0);
+  //Read date to scan
+  stringset_get_selected(1,scanwin.toolbar,1,&scanmonth);
+  scanmonth++;
+  scanday=findnumber(scanwin.toolbar,3,0);
+  if (scanday==0) {return reporterror("e6",0);}
+  scandayofweek=finddayofweek(scanday,scanmonth);
+
+  //Clear all of previous scan data
+  if (scanwin.recorddata!=NULL) {flex_free((flex_ptr)&scanwin.recorddata);}
+  if (scanwin.text!=NULL) {flex_free((flex_ptr)&scanwin.text);}
+  scanwin.records=scanwin.maxrecords=0;
+  scanwin.curoff=scanwin.maxoff=0;
+
+  //Do the scan
+  if (scanfile(scanmonth)==1) {
+    //Only do second scan if no error in first
+    scanfile(0);
+  }
+
+  //Tidy up the memory
+  if (scanwin.recorddata!=NULL) {
+    flex_extend((flex_ptr)&scanwin.recorddata,scanwin.records*sizeof(REC_DATA));
+    scanwin.maxrecords=scanwin.records;
+  }
+  if (scanwin.text!=NULL) {
+    flex_extend((flex_ptr)&scanwin.text,scanwin.curoff*sizeof(char));
+    scanwin.maxoff=scanwin.curoff;
+  }
+
+  //Update records icon
+  sprintf(text,"%d",scanwin.records);
+  displayfield_set_value(0,scanwin.toolbar,14,text);
+
+  //Sort the events
+  sortwin1=sortwin2=&scanwin;
+  qsort((void *)scanwin.recorddata,(size_t)scanwin.records,sizeof(REC_DATA),comparerecords);
+
+  //Setup the window
+  justifywindow(&scanwin,1);
+  _swi(Hourglass_Off,0);
+  return 1;
+}
+
+//This code is called when search is selected
+int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  int loop,searchresult=1,recresult=1,state,len;
+  int offset=0,offset2=0,offset3=0,nextchar,lastchar=32;
+  char text[12],filename[256];
+  FILE *fileptr;
+
+  _swi(Hourglass_On,0);
+
+  //Clear all of previous search data
+  if (srchwin.recorddata!=NULL) {flex_free((flex_ptr)&srchwin.recorddata);}
+  if (srchwin.text!=NULL) {flex_free((flex_ptr)&srchwin.text);}
+  srchwin.records=srchwin.maxrecords=0;
+  srchwin.curoff=srchwin.maxoff=0;
+
+  //Check for event mask
+  popup_get_menu(0,srchwin.toolbar,0x16,&typemenu);
+  srchmask=1;
+  for (loop=1;loop<numoftypes;loop++) {
+    menu_get_tick(0,typemenu,loop,&state);
+    srchmask+=(state!=0)<<loop;
+  }
+
+  //Read string to search and parse it
+  writablefield_get_value(0,srchwin.toolbar,1,srchstring,64,&len);
+  optionbutton_get_state(0,srchwin.toolbar,2,&srchcasesen);
+  //Remove leading spaces
+  for (;srchstring[offset]==32 || srchstring[offset]==160 || srchstring[offset]=='*';offset++) {}
+  //Copy all up to terminator removing double spaces
+  for (;srchstring[offset]>=32;offset++) {
+    nextchar=srchstring[offset];
+    if (nextchar==160) {nextchar=32;}
+    if (srchcasesen==0) {nextchar=toupper(nextchar);}
+    if (nextchar!=32 || lastchar!=32) {srchstring[offset2++]=nextchar;}
+    if (nextchar!=32 && nextchar!='*') {offset3=offset2;}
+    lastchar=nextchar;
+  }
+  //Put terminator after last non-space
+  srchstring[offset3++]=0;
+
+  //Check the range for the search
+  optionbutton_get_state(0,srchwin.toolbar,11,&srchrange);
+  numberrange_get_value(0,srchwin.toolbar,19,&srchyear1);
+  stringset_get_selected(1,srchwin.toolbar,15,&srchmonth1);
+  numberrange_get_value(0,srchwin.toolbar,17,&srchday1);
+  srchmonth1++;
+  numberrange_get_value(0,srchwin.toolbar,20,&srchyear2);
+  stringset_get_selected(1,srchwin.toolbar,16,&srchmonth2);
+  numberrange_get_value(0,srchwin.toolbar,18,&srchday2);
+  srchmonth2++;
+
+  //Run through all files searching in them
+  for (loop=0;loop<=12 && searchresult!=0;loop++) {
+    sprintf(filename,"%s.TodayData.%s",todaypath,monthfiles[loop]);
+    fileptr=fopen(filename,"rb");
+    if (fileptr==NULL) {
+      reporterror("e4",filename);
+      searchresult=0;
+    }
+    recresult=1;
+    while (searchresult!=0 && recresult>0) {
+      recresult=loadnextrecord(fileptr,&srchwin,loop,recordlimit);
+      if (recresult==0) {searchresult=0;}
+      if (recresult>0) {
+        //Check if event type is in search mask
+        if (searchmatch(&srchwin,&srchwin.recorddata[srchwin.records])!=0) {
+          addeventtolist(&srchwin);
+        }
+      }
+    }
+    fclose(fileptr);
+    _swi(Hourglass_Percentage,_IN(0),((loop+1)*100)/13);
+  }
+
+  //Tidy up the memory
+  if (srchwin.recorddata!=NULL) {
+    flex_extend((flex_ptr)&srchwin.recorddata,srchwin.records*sizeof(REC_DATA));
+    srchwin.maxrecords=srchwin.records;
+  }
+  if (srchwin.text!=NULL) {
+    flex_extend((flex_ptr)&srchwin.text,srchwin.curoff*sizeof(char));
+    srchwin.maxoff=srchwin.curoff;
+  }
+
+  //Update records icon
+  sprintf(text,"%d",srchwin.records);
+  displayfield_set_value(0,srchwin.toolbar,14,text);
+
+  //Sort the events
+  sortwin1=sortwin2=&srchwin;
+  qsort((void *)srchwin.recorddata,(size_t)srchwin.records,sizeof(REC_DATA),comparerecords);
+
+  //Setup the window
+  justifywindow(&srchwin,1);
+  _swi(Hourglass_Off,0);
+  srchdone=1;
+  return 1;
+}
+
+//This code is called when scan is selected
+int scan_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  beginscan();
+  return 1;
+}
+
+//This code is called when scan today is selected
+int scantoday_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  settocurrentdate(scanwin.toolbar,3,1,0);
+  beginscan();
+  return 1;
+}
+
+//Draws a piece of text onto screen, using fonts if needed
+//If width is nonzero it right justifies to that width
+int placetext(char *text,int x,int y,int width)
+{
+  if (version>=350) {
+    //Can use wimp_textop
+    if (width!=0) {
+      _swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_IN(5),0x80000002,text,-1,-1,x+width,y-20);
+    }
+    else
+    {
+      _swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_IN(5),2,text,-1,-1,x,y-20);
+    }
+  }
+  else
+  {
+    if (width!=0) {
+      _swi(OS_Plot,_IN(0)|_IN(1)|_IN(2),4,x+width-16*strlen(text),y);
+    }
+    else
+    {
+      _swi(OS_Plot,_IN(0)|_IN(1)|_IN(2),4,x,y);
+    }
+    printf("%s",text);
+  }
+  return 1;
+}
+
+//Redraws the list of events
+int redrawlist(WIN_DATA *window)
+{
+  int block[25],xmin,ymax,redrawcode,loop,x,y,offset,termchar;
+  int topcoord,botcoord,firstrow,lastrow,highlight,displayfield;
+  int rfirst,rlast;
+  char text[12],*string;
+
+  //Now find the size of the window
+  window_get_wimp_handle(0,window->window,&block[0]);
+
+  redrawcode=_swi(Wimp_RedrawWindow,_IN(1)|_RETURN(0),block);
+  xmin=block[1]-block[5];
+  ymax=block[4]-block[6]-window->toolbarheight;
+
+  while (redrawcode!=0)
+  {
+    //Find rows to redraw
+    topcoord=ymax-8-block[10];
+    botcoord=ymax-8-block[8];
+    firstrow=topcoord/40;
+    lastrow=botcoord/40;
+
+    for (loop=0;loop<window->records;loop++) {
+      //Check if record needs to be drawn
+      rfirst=window->recorddata[loop].startline;
+      rlast=window->recorddata[loop].endline;
+      if ((rfirst>=firstrow && rfirst<=lastrow) || (rlast>=firstrow && rlast<=lastrow) || (rfirst<=firstrow && rlast>=lastrow)) {
+        y=ymax-16-40*window->recorddata[loop].startline;
+        x=xmin+8;
+        displayfield=(loop==0);
+
+        //Set text colour
+        highlight=window->recorddata[loop].fromown&highlightstate;
+        if (version>=350) {
+          if (highlight!=0) {
+            _swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2),0,0x0000ff00,0xdddddd00);
+          }
+          else
+          {
+            _swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2),0,0x00000000,0xdddddd00);
+          }
+        }
+        else
+        {
+          if (highlight!=0) {
+            _swi(Wimp_SetColour,_IN(0),11);
+          }
+          else
+          {
+            _swi(Wimp_SetColour,_IN(0),7);
+          }
+        }
+
+        //Display year
+        if (displayfield==1 || window->recorddata[loop].year!=window->recorddata[loop-1].year) {
+          displayfield=1;
+          if (window->recorddata[loop].year==unknown_year) {
+            sprintf(text,"????");
+          }
+          else
+          {
+            if (window->recorddata[loop].year<0) {
+              sprintf(text,"%dBC",-window->recorddata[loop].year);
+            }
+            else
+            {
+              sprintf(text,"%d",window->recorddata[loop].year);
+            }
+          }
+          placetext(text,x,y,yeartextwidth);
+        }
+        x+=yearwidth;
+  
+        //Only display date in the search window
+        if (window->listdates!=0) {
+          //Display month
+          if (displayfield==1 || window->recorddata[loop].month!=window->recorddata[loop-1].month) {
+            displayfield=1;
+            if (window->recorddata[loop].month<=0) {
+              placetext(monthnames[0],x,y,0);
+            }
+            else
+            {
+              placetext(monthnames[window->recorddata[loop].month],x,y,0);
+            }
+          }
+          x+=monthwidth;
+
+          //Display day
+          if (displayfield==1 || window->recorddata[loop].day!=window->recorddata[loop-1].day) {
+            displayfield=1;
+            if (window->recorddata[loop].day<=0) {
+              sprintf(text,"??");
+            }
+            else
+            {
+              sprintf(text,"%d",window->recorddata[loop].day);
+            }
+            placetext(text,x,y,daytextwidth);
+          }
+          x+=daywidth;
+        }
+  
+        //Display type
+        placetext(eventtypes[window->recorddata[loop].type].str+2,x,y,0);
+        x+=typewidth;
+        
+        //Display event
+        string=window->text+window->recorddata[loop].textoff;
+        do {
+          //Find the terminating char and replace by a zero
+          for (offset=0;string[offset]>=32;offset++) {}
+          termchar=string[offset];
+          string[offset]=0;
+          placetext(string,x,y,0);
+          string[offset]=termchar;
+          if (termchar==13) {
+            //Need to do next line
+            string+=offset+1;
+            offset=0;
+            y-=40;
+          }
+        } while (string[offset]!=0);
+      }
+    }
+
+    redrawcode=_swi(Wimp_GetRectangle,_IN(1)|_RETURN(0),block);
+  }
+  return 1;
+}
+
+//Redraws the list of events in the windows
+int redraw_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *handle)
+{
+  if (id_block->self_id==scanwin.window) {redrawlist(&scanwin);}
+  if (id_block->self_id==srchwin.window) {redrawlist(&srchwin);}
+  return 1;
+}
+
+//Alters state of highlight flag
+int highlight_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  BBox extent;
+  highlightstate^=1;
+  menu_set_tick(0,id_block->self_id,id_block->self_component,highlightstate);
+
+  //Redraw the windows
+  window_get_extent(0,scanwin.window,&extent);
+  window_force_redraw(0,scanwin.window,&extent);
+  window_get_extent(0,srchwin.window,&extent);
+  window_force_redraw(0,srchwin.window,&extent);
+  return 1;
+}
+  
+//Sets shaded items in save menu
+int openingsave_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  menu_set_fade(0,id_block->self_id,0,scanwin.records==0);
+  menu_set_fade(0,id_block->self_id,1,scanwin.records==0);
+  menu_set_fade(0,id_block->self_id,2,srchwin.records==0);
+  menu_set_fade(0,id_block->self_id,3,srchwin.records==0);
+  return 1;
+}
+
+//Routine deletes a record after copying data to kept record
+int deleterecord(int del,int keep)
+{
+  int loop;
+  if (sortwin1->recorddata[keep].type==0 || (sortwin1->recorddata[keep].type<=2 && sortwin1->recorddata[del].type>2)) {
+    //Type of kept record is unknown or it is an event/rmeinder
+    //and other record is more specific so copy type of other record
+    sortwin1->recorddata[keep].type=sortwin1->recorddata[del].type;
+  }
+  if (sortwin1->recorddata[keep].year==unknown_year) {
+    //Copy year if kept record has unknown year
+    sortwin1->recorddata[keep].year=sortwin1->recorddata[del].year;
+    //Check that the events have years and reminders do not
+    if (sortwin1->recorddata[keep].type==1 && sortwin1->recorddata[keep].year==unknown_year) {sortwin1->recorddata[keep].type=2;}
+    if (sortwin1->recorddata[keep].type==2 && sortwin1->recorddata[keep].year!=unknown_year) {sortwin1->recorddata[keep].type=1;}
+  }
+  for(loop=del;loop<sortwin1->records-1;loop++) {
+    sortwin1->recorddata[loop]=sortwin1->recorddata[loop+1];
+  }
+  sortwin1->records--;
+  return 1;
+}
+
+//Loads all of the event types from a messages file
+int loadeventtypes(MessagesFD *messages)
+{
+  char string[8];
+  _kernel_oserror *error=NULL;
+  int loop,num;
+
+  for (num=0;error==NULL;num++) {
+    sprintf(string,"ev%d",num);
+    flex_extend((flex_ptr)&eventtypes,(numoftypes+1)*sizeof(STRING));
+    error=_swix(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),messages,string,eventtypes[numoftypes].str,20);
+    if (error==NULL) {
+      //First check if the event is a new letter
+      for (loop=0;loop<numoftypes && eventtypes[loop].str[0]!=eventtypes[numoftypes].str[0];loop++) {}
+      if (loop==numoftypes) {numoftypes++;}
+    }
+  }
+  return 1;
+}
+
+//Setup menus with event types
+int setuptypemenus(int firsttype)
+{
+  char *strings,*stringsptr;
+  int menuitem[10],loop;
+  ComponentId entry;
+  //Setup the type menu in the add window and list for search window
+  strings=malloc(20*numoftypes);
+  stringsptr=strings;
+  for (loop=1;loop<numoftypes;loop++) {
+    if (loop>1) {
+      stringsptr[0]=',';
+      stringsptr++;
+    }
+    stringsptr+=sprintf(stringsptr,"%s",eventtypes[loop].str+2);
+  }
+  stringset_set_available(0,addwin.window,0x28,strings);
+  stringset_set_available(0,editwin.window,0x28,strings);
+  free(strings);
+
+  menuitem[0]=1;
+  menuitem[3]=20;
+  menuitem[4]=0;
+  menuitem[5]=0;
+  menuitem[6]=0;
+  menuitem[7]=13;
+  menuitem[8]=0;
+  menuitem[9]=0;
+  
+  for (loop=firsttype;loop<numoftypes;loop++) {
+    menuitem[1]=loop;
+    menuitem[2]=(int)(eventtypes[loop].str+2);
+    menu_add_entry(0,typemenu,-2,(char *)menuitem,&entry);
+  }
+  return 1;
+}
+
+//Joins and sorts data
+int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  int loadedevents=0,savedevents=0,filenum,loop,loop2,len,result,oldnumoftypes;
+  char text1[8],text2[8],text3[8],newpath[256],messagepath[256];
+  _kernel_oserror error,*error2;
+  WIN_DATA joindata;
+  MessagesFD newmess;
+  FILE *fileptr;
+
+  _swi(Hourglass_On,0);
+  joindata.maxrecords=0;
+  joindata.recorddata=NULL;
+  joindata.text=NULL;
+  joindata.maxoff=0;
+  if (event->hdr.event_code==9) {
+    displayfield_get_value(0,joinwindow,4,newpath,256,&len);
+
+    //Check to see if there are any new types to load
+    sprintf(newpath+len-1,".Messages");
+    error2=_swix(MessageTrans_OpenFile,_IN(0)|_IN(1)|_IN(2),&newmess,newpath,0);
+    if (error2==NULL) {
+      oldnumoftypes=numoftypes;
+      loadeventtypes(&newmess);
+      _swi(MessageTrans_CloseFile,_IN(0),&newmess);
+      if (numoftypes>oldnumoftypes) {
+        //Have found some new types so update menus and messages file
+        setuptypemenus(oldnumoftypes);
+        findfontwidths();
+        justifywindow(&scanwin,1);
+        justifywindow(&srchwin,1);
+
+        //Close messages file before editing it
+        _swi(MessageTrans_CloseFile,_IN(0),&messages);
+        sprintf(messagepath,"%s.Messages",todaypath);
+        fileptr=fopen(messagepath,"a");
+        for (loop=oldnumoftypes;loop<numoftypes;loop++) {
+          fprintf(fileptr,"ev%d:%s\n",loop,eventtypes[loop].str);
+        }
+        fclose(fileptr);
+        _swix(MessageTrans_OpenFile,_IN(0)|_IN(1)|_IN(2),&messages,messagepath,0);
+      }
+    }
+
+    newpath[len-1]=0;
+  }
+
+  for (filenum=0;filenum<=12;filenum++) {
+    joindata.curoff=joindata.records=0;
+    if (loadallevents(&joindata,todaypath,filenum)==0 || (event->hdr.event_code==9 && loadallevents(&joindata,newpath,filenum)==0)) {
+      //Error so lose all data
+      if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
+      if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
+      return 1;
+    }
+
+    //Sort all of the data into date order
+    loadedevents+=joindata.records;
+    sortwin1=sortwin2=&joindata;
+    ignoretypes=1;
+    ignoreyears=0;
+    qsort((void *)joindata.recorddata,(size_t)joindata.records,sizeof(REC_DATA),joincompare);
+
+    //Remove all duplicates
+    for (loop=joindata.records-1;loop>0;loop--) {
+      if (joindata.recorddata[loop].year==unknown_year) {
+        //Record has an unknown year so check against all events
+        loop2=joindata.records-1;
+        ignoreyears=1;
+      }
+      else
+      {
+        //Record has a year so only check against same year events
+        loop2=loop-1;
+      }
+
+      //Check against each of the previous records that are on same date
+      for (;loop2>=0 && (ignoreyears==1 || (joindata.recorddata[loop2].year==joindata.recorddata[loop].year && joindata.recorddata[loop2].month==joindata.recorddata[loop].month && joindata.recorddata[loop2].day==joindata.recorddata[loop].day));loop2--) {
+        if (loop2!=loop) {
+          //Compare records
+          result=joincompare(&joindata.recorddata[loop2],&joindata.recorddata[loop]);
+          switch (result) {
+            case -2:
+            case 2:
+              //Records are not equal so move down list
+              break;
+            case -1:
+              //Records are equal, but second is loop so delete loop2
+              deleterecord(loop2,loop);
+              loop--;
+              break;
+            case 0:
+            case 1:
+              //Records are equal, so delete loop
+              deleterecord(loop,loop2);
+              loop2=-1;
+              break;
+          }
+        }
+      }
+    }
+
+    //Sort all of the data into type and date order
+    ignoretypes=ignoreyears=0;
+    qsort((void *)joindata.recorddata,(size_t)joindata.records,sizeof(REC_DATA),joincompare);
+
+    //Save data
+    if (saveallevents(&joindata,todaypath,filenum)==NULL) {
+      if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
+      if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
+      return NULL;
+    }
+    savedevents+=joindata.records;
+    _swi(Hourglass_Percentage,_IN(0),(filenum+1)*100/13);
+  }
+  if (joindata.recorddata!=NULL) {flex_free((flex_ptr)&joindata.recorddata);}
+  if (joindata.text!=NULL) {flex_free((flex_ptr)&joindata.text);}
+
+  //Report
+  _swi(Hourglass_Off,0);
+  error.errnum=0;
+  sprintf(text1,"%d",loadedevents);
+  sprintf(text2,"%d",loadedevents-savedevents);
+  sprintf(text3,"%d",savedevents);
+  _swi(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_IN(5)|_IN(6),&messages,"t5",error.errmess,252,text1,text2,text3);
+  _swi(Wimp_ReportError,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_IN(5),&error,1+(1<<8)+(1<<9),"Today",0,1,0);
+  return 1;
+}
+
+//Called when opening saveas window
+int showingsaveas_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  int size;
+  //Guess size of file
+  if (id_block->parent_component<2) {
+    size=100*scanwin.records;
+  }
+  else
+  {
+    size=100*srchwin.records;
+  }
+  saveas_set_file_size(0,id_block->self_id,size);
+  return 1;
+}
+
+//Called when save done
+int savefile_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  FILE *fileptr;
+  WIN_DATA *window;
+  int loop,loop2,offset,offset2,displayfield;
+  int wordlen,length,maxmonth,maxevent,maxheader,maxtext,termchar;
+  char string[32],token[4];
+
+  //Open the output file
+  fileptr=fopen(event->data.bytes,"w");
+  if (fileptr==NULL) {
+    saveas_file_save_completed(0,id_block->self_id,event->data.bytes);
+    return reporterror("e3",event->data.bytes);
+  }
+
+  //Check window to save
+  if (id_block->parent_component<2) {
+    window=&scanwin;
+  }
+  else
+  {
+    window=&srchwin;
+  }
+
+  //Check type of save to do
+  if ((id_block->parent_component&1)==0) {
+    //Do a full text save
+    //Find max lengths of strings
+    maxmonth=0;
+    for (loop=0;loop<=12;loop++) {
+      if (strlen(monthnames[loop])>maxmonth) {maxmonth=strlen(monthnames[loop]);}
+    }
+    maxmonth++;
+    maxevent=0;
+    for (loop=0;loop<numoftypes;loop++) {
+      if (strlen(eventtypes[loop].str+2)>maxevent) {maxevent=strlen(eventtypes[loop].str+2);}
+    }
+    maxevent+=2;
+    if (window->listdates!=0) {
+      maxheader=6+maxmonth+4+maxevent;
+    }
+    else
+    {
+      maxheader=6+maxevent;
+    }
+    maxtext=80-maxheader;
+
+    for (loop=0;loop<window->records;loop++) {
+      displayfield=(loop==0);
+      if (displayfield==1 || window->recorddata[loop].year!=window->recorddata[loop-1].year) {
+        displayfield=1;
+        if (window->recorddata[loop].year==unknown_year) {
+          fprintf(fileptr," ???? ");
+        }
+        else
+        {
+          if (window->recorddata[loop].year>=0) {
+            fprintf(fileptr," %4d ",window->recorddata[loop].year);
+          }
+          else
+          {
+            fprintf(fileptr,"%3dBC ",-window->recorddata[loop].year);
+          }
+        }
+      }
+      else
+      {
+        fprintf(fileptr,"      ");
+      }
+
+      if (window->listdates!=0) {
+        //Display month
+        length=0;
+        if (displayfield==1 || window->recorddata[loop].month!=window->recorddata[loop-1].month) {
+          displayfield=1;
+          if (window->recorddata[loop].month<=0) {
+            length=fprintf(fileptr,"%s",monthnames[0]);
+          }
+          else
+          {
+            length=fprintf(fileptr,"%s",monthnames[window->recorddata[loop].month]);
+          }
+        }
+        for (;length<maxmonth;length++) {fputc(32,fileptr);}
+
+        //Display day
+        if (displayfield==1 || window->recorddata[loop].day!=window->recorddata[loop-1].day) {
+          displayfield=1;
+          if (window->recorddata[loop].day<=0) {
+            fprintf(fileptr,"??  ");
+          }
+          else
+          {
+            fprintf(fileptr,"%2d  ",window->recorddata[loop].day);
+          }
+        }
+        else
+        {
+          fprintf(fileptr,"    ");
+        }
+      }
+
+      //Display type
+      length=fprintf(fileptr,"%s",eventtypes[window->recorddata[loop].type].str+2);
+      for (;length<maxevent;length++) {fputc(32,fileptr);}
+
+      //Display the event
+      length=0;
+      offset=window->recorddata[loop].textoff;
+      do {
+        //Find length of the next word
+        offset2=offset;
+        for (;window->text[offset]>32;offset++) {}
+        termchar=window->text[offset];
+        wordlen=offset-offset2;
+        if (length>0) {wordlen++;}
+        if (length+wordlen<=maxtext) {
+          //Word will fit so save and move on
+          if (length>0) {fputc(32,fileptr);}
+          for (;offset2<offset;offset2++) {
+            fputc(window->text[offset2],fileptr);
+          }
+          length+=wordlen;
+          offset++;
+        }
+        else
+        {
+          //Need to break line
+          if (length>0) {
+            //Already have some text so terminate current and move on
+            fputc(10,fileptr);
+            for (loop2=0;loop2<maxheader;loop2++) {fputc(32,fileptr);}
+            for (;offset2<offset;offset2++) {
+              fputc(window->text[offset2],fileptr);
+            }
+            length=wordlen-1;
+            offset++;
+          }
+          else
+          {
+            //Break word midway
+            for (offset=offset2;offset<offset2+maxtext;offset++) {
+              fputc(window->text[offset],fileptr);
+            }
+            fputc(10,fileptr);
+            for (loop2=0;loop2<maxheader;loop2++) {fputc(32,fileptr);}
+            length=0;
+            termchar=32;
+          }
+        }
+      } while (termchar>0);
+
+      fputc(10,fileptr);
+    }
+  }
+  else
+  {
+    //Do a CSV save
+    for (loop=0;loop<=4;loop++) {
+      sprintf(token,"t%d",loop);
+      _swi(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages,token,string,32);
+      fprintf(fileptr,"\"%s\"",string);
+      if (loop<4) {fputc(',',fileptr);}
+    }
+    fputc(10,fileptr);
+    for (loop=0;loop<window->records;loop++) {
+      if (window->recorddata[loop].year==unknown_year) {
+        fprintf(fileptr,"\"????\",");
+      }
+      else
+      {
+        if (window->recorddata[loop].year>=0) {
+          fprintf(fileptr,"\"%d\",",window->recorddata[loop].year);
+        }
+        else
+        {
+          fprintf(fileptr,"\"%dBC\",",-window->recorddata[loop].year);
+        }
+      }
+      if (window->listdates!=0) {
+        if (window->recorddata[loop].month<=0) {
+          fprintf(fileptr,"\"%s\",",monthnames[0]);
+        }
+        else
+        {
+          fprintf(fileptr,"\"%s\",",monthnames[window->recorddata[loop].month]);
+        }
+        if (window->recorddata[loop].day<=0) {
+          fprintf(fileptr,"\"??\",");
+        }
+        else
+        {
+          fprintf(fileptr,"\"%d\",",window->recorddata[loop].day);
+        }
+      }
+      fprintf(fileptr,"\"%s\",\"",eventtypes[window->recorddata[loop].type].str+2);
+      offset=window->recorddata[loop].textoff;
+      for (;window->text[offset]>0;offset++) {
+        if (window->text[offset]!=13) {
+          fputc(window->text[offset],fileptr);
+        }
+        else
+        {
+          fputc(32,fileptr);
+        }
+      }
+      fprintf(fileptr,"\"\n");
+    }
+  }
+
+  //Close the file
+  fclose(fileptr);
+
+  //Say save is complete
+  saveas_file_save_completed(1,id_block->self_id,event->data.bytes);
+  return 1;
+}
+
+//Finds id_block for icon bar icon
+int createibar_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  if (strcmp(event->data.bytes,"Iconbar")==0) {
+    //Creating iconbar
+    iconbar_id=id_block->self_id;
+    iconbar_component=id_block->self_component;
+  }
+  return 1;
+}
+
+//Handles button clicks in search window
+int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *handle)
+{
+  int block[25],row,row2,loop,offset=0,offset2,offset3,match=0;
+  int textoff,left,right,termchar,nextchar,writeable,month;
+  REC_DATA *record=NULL;
+  WIN_DATA *butwin;
+  char *string,filename[256];
+  ObjectId window;
+
+  if (id_block->self_id==scanwin.toolbar || id_block->self_id==srchwin.toolbar) {
+    //Could be a button to open a window
+    switch (id_block->self_component) {
+      case 0x20:
+        toolbox_show_object(0,scanwin.window,0,0,iconbar_id,iconbar_component);
+        gadget_set_focus(0,scanwin.toolbar,3);
+        break;
+      case 0x21:
+        toolbox_show_object(0,srchwin.window,0,0,iconbar_id,iconbar_component);
+        gadget_set_focus(0,srchwin.toolbar,1);
+        break;
+      case 0x22:
+        openadd_event(event_code,NULL,id_block,handle);
+        break;
+      case 0x23:
+        toolbox_create_object(0,"JoinWin",&window);
+        toolbox_show_object(0,window,0,0,iconbar_id,iconbar_component);
+        break;
+      case 0x24:
+        //Open an edit window for the own and month files
+        sprintf(filename,"Filer_Run %s.TodayData.%s",todaypath,monthfiles[0]);
+        _swi(Wimp_StartTask,_IN(0),filename);
+        stringset_get_selected(1,scanwin.toolbar,1,&month);
+        month++;
+        sprintf(filename,"Filer_Run %s.TodayData.%s",todaypath,monthfiles[month]);
+        _swi(Wimp_StartTask,_IN(0),filename);
+    }
+  }
+  else
+  {
+    if ((event->mouse_click.buttons==1 || event->mouse_click.buttons==4) && (id_block->self_id==srchwin.window || id_block->self_id==scanwin.window) && event->mouse_click.icon_handle==-1) {
+      //Find selected row
+      if (id_block->self_id==srchwin.window) {
+        butwin=&srchwin;
+      }
+      else
+      {
+        butwin=&scanwin;
+      }
+      block[0]=event->mouse_click.window_handle;
+      _swi(Wimp_GetWindowState,_IN(1),block);
+      row=(block[4]-block[6]-butwin->toolbarheight-8-event->mouse_click.mouse_y)/40;
+      //Find selected event
+      for (loop=0;record==NULL && loop<butwin->records;loop++) {
+        if (row>=butwin->recorddata[loop].startline && row<=butwin->recorddata[loop].endline) {record=&butwin->recorddata[loop];}
+      }
+  
+      if (record!=NULL) {
+        if (event->mouse_click.buttons==1) {
+          //Want to edit the event so open the edit window
+          //First copy record data to the edit window so a record is kept
+          editwin.records=editwin.maxrecords=0;
+          editwin.curoff=editwin.maxoff=0;
+          if (makeroomfordata(&editwin,0x7fffffff)==NULL) {
+            if (editwin.recorddata!=NULL) {flex_free((flex_ptr)&editwin.recorddata);}
+            if (editwin.text!=NULL) {flex_free((flex_ptr)&editwin.text);}
+            return NULL;
+          }
+          editwin.recorddata[0]=*record;
+          editwin.records++;
+          editwin.recorddata[0].textoff=0;
+          for (offset=0;butwin->text[record->textoff+offset]>0;) {
+            nextchar=butwin->text[record->textoff+offset];
+            if (nextchar==13) {nextchar=32;}
+            editwin.text[offset++]=nextchar;
+          }
+          editwin.text[offset++]=0;
+          editwin.curoff=offset;
+  
+          //Now set up the gadgets
+          if (record->year==unknown_year) {
+            numberrange_get_components(1,editwin.window,19,&writeable,0,0,0);
+            writablefield_set_value(0,editwin.window,writeable,"");
+          }
+          else
+          {
+            numberrange_set_value(0,editwin.window,19,record->year);
+          }
+          if (record->month<=0) {
+            stringset_set_selected(0,editwin.window,1,monthnames[1]);
+          }
+          else
+          {
+            stringset_set_selected(0,editwin.window,1,monthnames[record->month]);
+          }
+          if (record->day<=0) {
+            numberrange_get_components(1,editwin.window,3,&writeable,0,0,0);
+            writablefield_set_value(0,editwin.window,writeable,"");
+          }
+          else
+          {
+            numberrange_set_value(0,editwin.window,3,record->day);
+          }
+          stringset_set_selected(0,editwin.window,0x28,eventtypes[record->type].str+2);
+          stringset_set_selected(1,editwin.window,29,(char *)(record->code));
+          radiobutton_set_state(0,editwin.window,0x1a,1-record->fromown);
+          radiobutton_set_state(0,editwin.window,0x1b,record->fromown);
+  
+          offset=0;
+          for (loop=0x22;loop<=0x26;loop++) {
+            //Find end of the next row
+            offset2=offset;
+            for (;editwin.text[offset2]>=32 && (offset2-offset)<80;offset2++) {
+              if (editwin.text[offset2]==32) {offset3=offset2;}
+            }
+            if (editwin.text[offset2]<=32) {offset3=offset2;}
+            termchar=editwin.text[offset3];
+            editwin.text[offset3]=0;
+            writablefield_set_value(0,editwin.window,loop,editwin.text+offset);
+            editwin.text[offset3]=termchar;
+            if (termchar>=32) {
+              offset=offset3+1;
+            }
+            else
+            {
+              offset=offset3;
+            }
+          }
+  
+          toolbox_show_object(0,editwin.window,0,0,iconbar_id,iconbar_component);
+        }
+        else
+        {
+          if (id_block->self_id==srchwin.window) {
+            //Scan date of record (if month/day defined)
+            if (record!=NULL && record->month>0 && record->day>0) {
+              stringset_set_selected(0,scanwin.toolbar,1,monthnames[record->month]);
+              numberrange_set_value(0,scanwin.toolbar,3,record->day);
+              beginscan();
+              toolbox_show_object(0,scanwin.window,0,0,iconbar_id,iconbar_component);
+            }
+          }
+          else
+          {
+            //Search for the word that is selected
+            textoff=(event->mouse_click.mouse_x-(block[1]-block[5]+8+yearwidth+typewidth));
+            string=scanwin.text+record->textoff;
+            for (row2=record->startline;row2<row;row2++) {
+              for (;string[offset]>=32;offset++) {}
+              offset++;
+            }
+      
+            offset3=offset;
+            do {
+              //Move to first terminator of letter
+              for (offset2=offset3;string[offset2]>=32 && lookup[string[offset2]]<=32;offset2++) {}
+              if (string[offset2]>=32) {
+                //Found start of a word so now find the end of it
+                for (offset3=offset2+1;lookup[string[offset3]]>32;offset3++) {}
+      
+                //Find the left and right edges of the word
+                if (version>=350) {
+                  if (offset2>offset) {
+                    left=_swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2)|_RETURN(0),1,string+offset,offset2-offset);
+                  }
+                  else
+                  {
+                    left=0;
+                  }
+                  right=_swi(Wimp_TextOp,_IN(0)|_IN(1)|_IN(2)|_RETURN(0),1,string+offset,offset3-offset);
+                }
+                else
+                {
+                  left=(offset2-offset)*16;
+                  right=(offset3-offset)*16;
+                }
+      
+                if (textoff>=left && textoff<=right) {match=1;}
+              }
+            } while (match==0 && string[offset2]>=32);
+      
+            //If word is matched, open the search window
+            if (match==1) {
+              termchar=string[offset3];
+              string[offset3]=0;
+              writablefield_set_value(0,srchwin.toolbar,1,string+offset2);
+              string[offset3]=termchar;
+              search_event(0,0,id_block,handle);
+              toolbox_show_object(0,srchwin.window,0,0,iconbar_id,iconbar_component);
+              gadget_set_focus(0,srchwin.toolbar,1);
+            }
+          }
+        }
+      }
+    }
+  }
+  return 1;
+}
+
+//Compares two strings
+int caseinsencmp(char *str1,char *str2)
+{
+  int offset=0;
+  do {
+    if (str1[offset]<32) {
+      if (str2[offset]<32) {
+        return 1;
+      }
+      else
+      {
+        return 0;
+      }
+    }
+    if (str2[offset]<32) {return 0;}
+    if (toupper(str1[offset])!=toupper(str2[offset])) {return 0;}
+    offset++;
+  } while(1);
+
+  return 1;
+}
+
+//Create record windows and initialise them
+int setupwindows(void)
+{
+  int state;
+  char opttext[40],path[256];
+  FILE *optfile;
+  ObjectId mainmenu;
+
+  createrecwindow("ScanWin","ScanTool",&scanwin);
+  scanwin.listdates=0;
+  createrecwindow("SrchWin","SrchTool",&srchwin);
+  srchwin.listdates=1;
+  toolbox_create_object(0,"JoinWin",&joinwindow);
+  toolbox_create_object(0,"AddWin",&addwin.window);
+  toolbox_create_object(0,"EditWin",&editwin.window);
+  addwin.recorddata=NULL;
+  addwin.text=NULL;
+  editwin.recorddata=NULL;
+  editwin.text=NULL;
+
+  toolbox_create_object(0,"TypeMenu",&typemenu);
+  setuptypemenus(1);
+  stringset_set_selected(1,addwin.window,0x28,0);
+  menu_remove_entry(0,typemenu,102);
+
+  settocurrentdate(scanwin.toolbar,3,1,0);
+  settocurrentdate(addwin.window,3,1,19);
+  beginscan();
+  justifywindow(&srchwin,0);
+
+  //Load options
+  toolbox_create_object(0,"MainMenu",&mainmenu);
+  sprintf(path,"%s.Options",todaypath);
+  optfile=fopen(path,"r");
+  while(feof(optfile)==0) {
+    if (fscanf(optfile,"%s",opttext)!=EOF) {
+      if (caseinsencmp(opttext,"HIGHLIGHT")==1) {
+        fscanf(optfile,"%d",&highlightstate);
+        menu_set_tick(0,mainmenu,4,highlightstate);
+      }
+      if (caseinsencmp(opttext,"ADDTOMONTH")==1) {
+        fscanf(optfile,"%d",&state);
+        radiobutton_set_state(0,addwin.window,0x1a,state);
+      }
+    }
+  }
+  fclose(optfile);
+  return 1;
+}
+
+//Handles selection of all in type menu
+int selectall_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  int loop;
+  for (loop=1;loop<numoftypes;loop++) {
+    menu_set_tick(0,id_block->self_id,loop,1);
+  }
+  return 1;
+}
+
+//Handles selection of none in type menu
+int selectnone_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  int loop;
+  for (loop=1;loop<numoftypes;loop++) {
+    menu_set_tick(0,id_block->self_id,loop,0);
+  }
+  return 1;
+}
+
+//Saves the options to a file
+int saveoptions_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  int state,on;
+  char path[256];
+  FILE *optfile;
+  sprintf(path,"%s.Options",todaypath);
+  optfile=fopen(path,"w");
+  fprintf(optfile,"Highlight %d\n",highlightstate);
+  radiobutton_get_state(0,addwin.window,0x1a,&state,&on);
+  fprintf(optfile,"AddToMonth %d\n",state);
+  fclose(optfile);
+  return 1;
+}
+
+int main(int argc,char *argv[])
+{
+    //Setup the list of wimp messages to receive
+    static int wimp_messages[]={
+      Wimp_MDataSave,
+      Wimp_MDataOpen,
+      Wimp_MDataLoad,
+      Wimp_MDataSaveAck,
+      Wimp_MFontChanged,
+      Wimp_MModeChange,
+      Wimp_MPreQuit,
+      Wimp_MQuit};
+
+    //Setup the list of toolbox events to receive
+    static int toolbox_events[]={
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      StringSet_ValueChanged,
+      SaveAs_AboutToBeShown,
+      SaveAs_SaveToFile,
+      Toolbox_ObjectAutoCreated,
+      0};
+
+    int  event_code,loop,loop2,len;
+//    int UTC[2];
+//    char debug_filename[100];
+    char string[8],string2[64];
+    _kernel_oserror *error;
+
+//    UTC[0]=3;
+//    _swi(OS_Word,_IN(0)|_IN(1),14,UTC);
+//    _swi(Territory_ConvertDateAndTime,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4),-1,UTC,debug_filename,100,"RAM::RamDisc0.$.%24%MI%SE%CS");
+//    debug=fopen(debug_filename,"w");
+//    if (debug==NULL) {
+//      printf("Could not open debug file");
+//      exit(0);
+//    }
+
+    //Copy data path into block so it cannot be corrupted by other copies
+    len=_swi(OS_ReadVarVal,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_RETURN(2),"Today$Dir",todaypath,256,0,0);
+
+    //initialise the flex library.
+    flex_init("Today",0);
+
+    //register ourselves with the Toolbox.
+    toolbox_initialise (0, WimpVersion, wimp_messages, toolbox_events, "<Today$Dir>",&messages, &id_block, &version, 0, (void **)&sprite_area);
+
+    //initialise the event library.
+    event_initialise (&id_block);
+
+    event_set_mask (1+256);
+
+    //Register all of the events
+    event_register_wimp_handler(-1,1,redraw_event,0);
+    event_register_wimp_handler(-1,6,button_event,0);
+
+    event_register_toolbox_handler(-1,1,selectibar_event,0);
+    event_register_toolbox_handler(-1,2,adjustibar_event,0);
+    event_register_toolbox_handler(-1,3,menuquit_event,0);
+    event_register_toolbox_handler(-1,4,scan_event,0);
+    event_register_toolbox_handler(-1,5,scantoday_event,0);
+    event_register_toolbox_handler(-1,6,search_event,0);
+    event_register_toolbox_handler(-1,7,highlight_event,0);
+    event_register_toolbox_handler(-1,8,openingsave_event,0);
+    event_register_toolbox_handler(-1,9,joindata_event,0);
+    event_register_toolbox_handler(-1,10,openadd_event,0);
+    event_register_toolbox_handler(-1,11,cleartext_event,0);
+    event_register_toolbox_handler(-1,12,addnew_event,0);
+    event_register_toolbox_handler(-1,13,altertypes_event,0);
+    event_register_toolbox_handler(-1,14,joindata_event,0);
+    event_register_toolbox_handler(-1,15,selectall_event,0);
+    event_register_toolbox_handler(-1,16,selectnone_event,0);
+    event_register_toolbox_handler(-1,17,saveoptions_event,0);
+    event_register_toolbox_handler(-1,18,delete_event,0);
+    event_register_toolbox_handler(-1,19,edit_event,0);
+    event_register_toolbox_handler(-1,SaveAs_AboutToBeShown,showingsaveas_event,0);
+    event_register_toolbox_handler(-1,SaveAs_SaveToFile,savefile_event,0);
+    event_register_toolbox_handler(-1,StringSet_ValueChanged,stringchanged_event,0);
+    event_register_toolbox_handler(-1,Toolbox_ObjectAutoCreated,createibar_event,0);
+    event_register_message_handler(Wimp_MDataLoad,draggingjoinfile_message,0);
+    event_register_message_handler(Wimp_MFontChanged,fontchange_message,0);
+    event_register_message_handler(Wimp_MModeChange,modechange_message,0);
+    event_register_message_handler(Wimp_MQuit,quit_message,0);
+
+    //Load all of the month names from messages file
+    for (loop=0;loop<=12;loop++) {
+      sprintf(string,"m%d",loop);
+      _swi(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages,string,monthnames[loop],4);
+    }
+
+    //Load all of the event names from messages file
+    flex_alloc((flex_ptr)&eventtypes,sizeof(STRING));
+    loadeventtypes(&messages);
+
+    //Load all of the words to replace from messages file
+    flex_alloc((flex_ptr)&repwords,sizeof(STRING_PAIR));
+    do {
+      flex_extend((flex_ptr)&repwords,(numofwords+1)*sizeof(STRING_PAIR));
+      sprintf(string,"re%d",numofwords+1);
+      error=_swix(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages,string,string2,64);
+      if (error==NULL) {
+        //Split the word into old and new parts
+        for (loop=0;string2[loop]!=',' && string2[loop]>=32;loop++) {
+          repwords[numofwords].strings[0].str[loop]=string2[loop];
+        }
+        repwords[numofwords].strings[0].str[loop]=0;
+        if (string2[loop]==',') {loop++;}
+        for (loop2=0;string2[loop+loop2]>=32;loop2++) {
+          repwords[numofwords].strings[1].str[loop2]=string2[loop+loop2];
+        }
+        repwords[numofwords].strings[1].str[loop2]=0;
+        numofwords++;
+      }
+    } while (error==NULL);
+
+    //Set size of screen data
+    findfontwidths();
+
+    setupwindows();
+
+    //poll loop
+    while (TRUE)
+    {
+        event_poll (&event_code, &poll_block, 0);
+    }
+}

@@ -1,0 +1,41 @@
+RMEnsure UtilityModule 3.10 Error This application is only suitable for use with RISC OS 3.10 or later versions
+
+RMENSURE FilterManager 0.09 RMLoad System:modules.FilterMgr
+RMENSURE FilterManager 0.09 Error You Need filter manager 0.09 or later
+
+RMEnsure BorderUtils 0.02 RMEnsure WindowManager 3.17  RMLoad System:modules.BorderUtil
+
+RMENSURE Toolbox     1.36  RMLOAD System:modules.toolbox.toolbox
+RMENSURE Toolbox     1.36  ERROR You need toolbox 1.36
+RMENSURE Window      1.31  RMLOAD System:modules.toolbox.window
+RMENSURE Window      1.31  ERROR You need window 1.31
+RMENSURE ColourDBox  0.15  RMLOAD System:modules.toolbox.ColourDBox
+RMENSURE ColourDBox  0.15  ERROR You need ColourDBox
+RMENSURE ColourMenu  0.17  RMLOAD System:modules.toolbox.ColourMenu
+RMENSURE ColourMenu  0.17  ERROR You need ColourMenu
+RMENSURE DCS         1.06  RMLOAD System:modules.toolbox.DCS_Quit
+RMENSURE DCS         1.06  ERROR You need DCS_Quit
+RMENSURE FileInfo    0.14  RMLOAD System:modules.toolbox.FileInfo
+RMENSURE FileInfo    0.14  ERROR You need FileInfo
+RMENSURE FontDbox    0.14  RMLOAD System:modules.toolbox.FontDbox
+RMENSURE FontDbox    0.14  ERROR You need FontDbox
+RMENSURE FontMenu    0.17  RMLOAD System:modules.toolbox.FontMenu
+RMENSURE FontMenu    0.17  ERROR You need FontMenu
+RMENSURE IconBar     1.12  RMLOAD System:modules.toolbox.IconBar
+RMENSURE IconBar     1.12  ERROR You need IconBar
+RMENSURE Menu        0.24  RMLOAD System:modules.toolbox.menu
+RMENSURE Menu        0.24  ERROR You need Menu
+RMENSURE PrintDBox   0.09  RMLOAD System:modules.toolbox.PrintDBox
+RMENSURE PrintDBox   0.09  ERROR You need PrintDBox
+RMENSURE ProgInfo    0.09  RMLOAD System:modules.toolbox.proginfo
+RMENSURE Proginfo    0.09  ERROR You need proginfo
+RMENSURE SaveAs      0.12  RMLOAD System:modules.toolbox.SaveAs
+RMENSURE SaveAs      0.12  ERROR You need Saveas
+RMENSURE Scale       0.11  RMLOAD System:modules.toolbox.Scale
+RMENSURE Scale       0.11  ERROR You need Scale
+
+Iconsprites <Obey$Dir>.!Sprites
+Set Today$Dir <Obey$Dir>
+
+WimpSlot -min 96K -max 96K
+Run <Today$Dir>.!RunImage %*0

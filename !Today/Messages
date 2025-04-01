@@ -1,0 +1,133 @@
+Token needed for Toolbox
+_TaskName:Today
+
+m0:???
+m1:Jan
+m2:Feb
+m3:Mar
+m4:Apr
+m5:May
+m6:Jun
+m7:Jul
+m8:Aug
+m9:Sep
+m10:Oct
+m11:Nov
+m12:Dec
+
+t0:Year
+t1:Month
+t2:Day
+t3:Type
+t4:Event
+t5:Loaded %0 events and removed %1 duplicates leaving %2 events.
+t6:Loaded %0 events and removed %1 duplicates leaving %2 events. Found %3 events that may be duplicated.
+
+Error messages
+e1:There is not enough memory to complete that operation. Please free some memory before trying again.
+e2:There are too many events matching those criteria. Please be more specific before repeating that search.
+e3:Couldn't open the '%0' to save data to.
+e4:Couldn't open file '%0'.
+e5:There is no text describing the event.
+e6:You must specify a day of the month before scanning.
+e7:Are you sure you want to delete this event?
+e8:Couldn't create file '%0'.
+
+Words to be replaced, format is old string,new string
+If the first letter of newstring is lower case it is made upper case
+if the first letter of the word it replaces is uppercase
+This is used to maintain consistency of style and also to remove spelling mistakes
+Must be upper case unless you want to use the verb endings when matching to these strings
+re1:&,and
+re2:CATHERDRAL,cathedral
+re3:EIGHT,8
+re4:FIFTH,5th
+re5:FIRST,1st
+re6:FIVE,5
+re7:FOUR,4
+re8:FOURTH,4th
+re9:GEMANY,Germany
+re10:GUINESS,Guinness
+re11:INDEPENDANCE,independence
+re12:LTALY,Italy
+re13:METEREOLOGICAL,meteorological
+re14:NINE,9
+re15:ONE,1
+re16:OVERTTHROWN,overthrown
+re17:PERFOMED,performed
+re18:SECOND,2nd
+re19:SEIGE,siege
+re20:SEVEN,7
+re21:SIX,6
+re22:TELEVISION,TV
+re23:TEN,10
+re24:THIRD,3rd
+re25:THREE,3
+re26:TWO,2
+re27:ULYSSSES,Ulysses
+re28:UNITED NATIONS,UN
+re29:UNITED STATES,US
+re30:UNITED STATES OF AMERICA,US
+re31:USA,US
+
+Words to be ignored when comparing whether or not two strings contain the same information
+Must be upper case unless you want to use the verb endings when matching to these strings
+ig1:1ST
+ig2:A
+ig3:AN
+ig4:AND
+ig5:ARE
+ig6:BY
+ig7:IN
+ig8:IS
+ig9:OF
+ig10:S
+ig11:THE
+ig12:TO
+ig13:WAS
+ig14:WERE
+
+Verb endings, these are used when comparing words. If the words are the same apart from their endings
+(and the endings are in this list) the words are taken to be the same
+Must be upper case unless you want to use the verb endings when matching to these strings
+DO NOT add irregular verb endings to this list. If you want to include irregular verbs use the thesaurus
+vb1:D
+vb2:E
+vb3:ED
+vb4:ES
+vb5:ING
+vb6:S
+vb7:Y
+
+Thesaurus, words that are to be treated as equivalent, separated by an '_'
+Must be upper case unless you want to use the verb endings when matching to these strings
+(ie lowercase unless initials)
+th1:actor_actress_megastar_singer_star
+th2:America_US
+th3:author_novelist_writer
+th4:bandleader_orchestra leader
+th5:battleship_destroyer
+th6:became_become
+th7:began_begun_start
+th8:beheaded_executed_hanged
+th9:Britain_England_UK
+th10:burned_burnt
+th11:dramatist_playwright
+th12:gardener_horticulturalist
+th13:made_manufactured
+th14:marine_troop
+th15:mexican_mexico
+th16:perform_performance_premiere_produce_production_stage
+th17:pop_popular
+th18:print_publish
+
+Event types, format is code letter, type name, must finish with a new line
+ev0:?,?????
+ev1:E,Event
+ev2:R,Reminder
+ev3:B,Birth
+ev4:D,Death
+ev5:W,War
+ev6:I,Discovery
+ev7:F,1st Event
+ev8:S,Sport

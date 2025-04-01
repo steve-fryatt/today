@@ -1,0 +1,30 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <math.h>
+#define maxloop 1000
+int main(void)
+{
+  FILE *fileptr;
+  int c;
+
+  fileptr=fopen("RAM::RamDisc0.$.Chars","w");
+  if (fileptr==NULL) {
+    printf("Error\n");
+    exit(1);
+  }
+  for (c=0;c<256;c++) {
+    if (c>=32 && c!=127) {
+      fputc(c,fileptr);
+    }
+    else
+    {
+      fputc('-',fileptr);
+    }
+    if (((c+1)%32)==0) {fputc(13,fileptr);}
+
+  }
+  fclose(fileptr);
+  return 1;
+}
