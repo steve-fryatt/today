@@ -50,11 +50,6 @@ typedef struct {
   char str[32];
 } STRING;
 
-//Structure to hold text strings
-typedef struct {
-  STRING strings[2];
-} STRING_PAIR;
-
 #define WimpVersion    310
 #define recordstep 50
 #define recordlimit 500
@@ -78,7 +73,7 @@ WIN_DATA scanwin,srchwin,addwin,editwin;
 STRING eventlists[3][maxeventlen];
 int lenofeventlists[3],eventlistmaps[3][maxeventlen];
 
-STRING_PAIR *wordlist[4];
+STRING *wordlist[4];
 int wordlistlen[4];
 char *thesaurustable;
 
@@ -202,14 +197,14 @@ int findwordinlist(char *string,int num)
   do {
     //Load the next character
     char1=lookup[string[offset]];
-    char2=lookup[wordlist[num][first].strings[0].str[offset]];
+    char2=lookup[wordlist[num][first].str[offset]];
 
     if (char1<=32) {
       //Char1 is a terminator so look for terminated strings
       if (char2<32) {
         //First string has terminated so this is a possible answer
         result=first++;
-        char2=wordlist[num][first].strings[0].str[offset];
+        char2=wordlist[num][first].str[offset];
       }
     }
 
@@ -217,7 +212,7 @@ int findwordinlist(char *string,int num)
     while (char2<char1) {
       first++;
       if (first<last) {
-        char2=wordlist[num][first].strings[0].str[offset];
+        char2=wordlist[num][first].str[offset];
       }
       else
       {
@@ -234,7 +229,7 @@ int findwordinlist(char *string,int num)
     do {
       last++;
       if (last<oldlast) {
-        char2=wordlist[num][last].strings[0].str[offset];
+        char2=wordlist[num][last].str[offset];
       }
       else
       {
@@ -253,6 +248,7 @@ int findwordinlist(char *string,int num)
 int parsestring(char *string)
 {
   int offset1,offset2=0,offset3=0,nextchar,lastchar=32,counter=0,len,loop;
+  char *offsettoreplace;
   for (offset1=0;string[offset1]>=32;offset1++) {
     nextchar=string[offset1];
     switch (nextchar) {
@@ -336,29 +332,33 @@ int parsestring(char *string)
       loop=findwordinlist(string+offset1,0);
       if (loop!=-1) {
 
-        fprintf(debug,"Replacing: '%s' in '%s'\n",wordlist[0][loop].strings[0].str,string);
+        fprintf(debug,"Replacing: '%s' in '%s'\n",wordlist[0][loop].str,string);
 
         //Have found a word in the string so replace it
         //Find start of block after word
-        offset2=offset1+strlen(wordlist[0][loop].strings[0].str);
+        offsettoreplace=strchr(wordlist[0][loop].str,',')+1;
+        offset2=offset1+(offsettoreplace-wordlist[0][loop].str-1);
         //Find length of block
         len=offset3-offset2;
         //Find new start of block
-        offset3=offset1+strlen(wordlist[0][loop].strings[1].str);
+        offset3=offset1+strlen(offsettoreplace);
         //Move block after word to its new start
         memmove(string+offset3,string+offset2,len);
         //Find new end of the block
         offset3=offset3+len;
         //Now copy the new word over the string, setting case of first letter
         len=0;
-        if (islower(wordlist[0][loop].strings[1].str[0]) && isupper(string[offset1+len])) {
-          string[offset1+len]=toupper(wordlist[0][loop].strings[1].str[0]);
+        if (islower(offsettoreplace[0]) && isupper(string[offset1+len])) {
+          string[offset1+len]=toupper(offsettoreplace[0]);
           len++;
         }
-        for (;wordlist[0][loop].strings[1].str[len]>=32;len++) {
-          string[offset1+len]=wordlist[0][loop].strings[1].str[len];
+        for (;offsettoreplace[len]>=32;len++) {
+          string[offset1+len]=offsettoreplace[len];
         }
         offset1+=len;
+
+        fprintf(debug,"After Replace: '%s'\n",string);
+
       }
       else
       {
@@ -3266,8 +3266,8 @@ int comparewordlist2(const void *e1,const void *e2)
   char *word1,*word2;
   int off1=0,off2=0,c1,c2;
 
-  word1=((STRING_PAIR *)e1)->strings[0].str;
-  word2=((STRING_PAIR *)e2)->strings[0].str;
+  word1=((STRING *)e1)->str;
+  word2=((STRING *)e2)->str;
   do {
     c1=lookup[word1[off1++]];
     c2=lookup[word2[off2++]];
@@ -3295,10 +3295,10 @@ int comparewordlist2(const void *e1,const void *e2)
 //Routine to load a list of words from the messages file
 int loadlist(int num,char *type)
 {
-  int loop,loop2,offset,messagenum=1;
+  int loop,offset,messagenum=1,aftercomma;
   char string[8],string2[64];
   _kernel_oserror *error;
-  flex_alloc((flex_ptr)&wordlist[num],sizeof(STRING_PAIR));
+  flex_alloc((flex_ptr)&wordlist[num],sizeof(STRING));
   wordlistlen[num]=0;
   do {
     sprintf(string,"%s%d",type,messagenum++);
@@ -3307,29 +3307,29 @@ int loadlist(int num,char *type)
       //Keep loading strings until no more '_'s are found
       offset=0;
       do {
-        flex_extend((flex_ptr)&wordlist[num],(wordlistlen[num]+1)*sizeof(STRING_PAIR));
-        //Split the word into old and new parts
-        for (loop=0;string2[offset+loop]!=',' && string2[offset+loop]!='_' && string2[offset+loop]>=32;loop++) {
-          wordlist[num][wordlistlen[num]].strings[0].str[loop]=toupper(string2[offset+loop]);
+        flex_extend((flex_ptr)&wordlist[num],(wordlistlen[num]+1)*sizeof(STRING));
+        //Copy the string and turn bits before comma to uppercase
+        aftercomma=0;
+        for (loop=0;string2[offset+loop]!='_' && string2[offset+loop]>=32;loop++) {
+          //Turn letter to uppercase if it is before the comma
+          if (aftercomma==0) {
+            if (string2[offset+loop]==',') {aftercomma=1;}
+            wordlist[num][wordlistlen[num]].str[loop]=toupper(string2[offset+loop]);
+          }
+          else
+          {
+            wordlist[num][wordlistlen[num]].str[loop]=string2[offset+loop];
+          }
         }
-        wordlist[num][wordlistlen[num]].strings[0].str[loop]=0;
+        wordlist[num][wordlistlen[num]].str[loop]=0;
         wordlistlen[num]++;
         offset+=loop+1;
       } while (string2[offset-1]=='_');
-
-      //Copy the replace word if there is one 
-      if (string2[loop]==',') {
-        loop++;
-        for (loop2=0;string2[loop+loop2]>=32;loop2++) {
-          wordlist[num][wordlistlen[num]-1].strings[1].str[loop2]=string2[loop+loop2];
-        }
-        wordlist[num][wordlistlen[num]-1].strings[1].str[loop2]=0;
-      }
     }
   } while (error==NULL);
 
   //Sort the words into order
-  qsort((void *)wordlist[num],(size_t)wordlistlen[num],sizeof(STRING_PAIR),comparewordlist2);
+  qsort((void *)wordlist[num],(size_t)wordlistlen[num],sizeof(STRING),comparewordlist2);
   return 1;
 }
 
@@ -3393,9 +3393,9 @@ int loadlists()
   for (loop=0;loop<20;loop++) {
     fprintf(debug,"%23s","");
     for (loop2=0;loop2<wordlistlen[3];loop2++) {
-      pos=strlen(wordlist[3][loop2].strings[0].str)-20+loop;
+      pos=strlen(wordlist[3][loop2].str)-20+loop;
       if (pos>=0) {
-        fprintf(debug," %c ",wordlist[3][loop2].strings[0].str[pos]);
+        fprintf(debug," %c ",wordlist[3][loop2].str[pos]);
       }
       else
       {
@@ -3412,7 +3412,7 @@ int loadlists()
   fprintf(debug,"\n");
 
   for (loop=0;loop<wordlistlen[3];loop++) {
-    fprintf(debug,"%20s : ",wordlist[3][loop].strings[0].str);
+    fprintf(debug,"%20s : ",wordlist[3][loop].str);
     for (loop2=0;loop2<wordlistlen[3];loop2++) {
       fprintf(debug," %1d ",thesaurustable[loop*wordlistlen[3]+loop2]);
     }
