@@ -1,16 +1,21 @@
-//Today - the revised version
+/* Today - main.c
+ *
+ * Today - the revised version
+ * Originally written by James Miskin
+ * Updated for 32-bit by Stephen Fryatt
+ */
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+
 #include "kernel.h"
 #include "swis.h"
 #include "flex.h"
 
-#include "sflib/debug.h"
+/* Include Toolbox headers. */
 
-//Include the toolbox stuff
 #include "colourdbox.h"
 #include "dcs.h"
 #include "drawfile.h"
@@ -27,64 +32,49 @@
 #include "wimp.h"
 #include "wimplib.h"
 
-//Structure to hold data for a record
-typedef struct {
-  //If year is unknown_year it is unknown
-  //If month or day are 0 they match to all months/days
-  //If month or day are <0 they are unknown
-  //Code if 1-7 for days, 8 for continue and 0 otherwise
-  int year,month,day,type,code,startline,endline,fromown,textoff;
-} REC_DATA;
+/* Include OSLib Headers. */
 
-//Structure to hold information for a list of records
-typedef struct {
-  ObjectId window,toolbar;
-  //listdates flag is nonzero if month and day are to be listed in window
-  int records,maxrecords,toolbarheight,listdates;
-  REC_DATA *recorddata;
-  //This block stores all the text for the window
-  char *text;
-  int curoff,maxoff;
-} WIN_DATA;
+#include "oslib/messagetrans.h"
+#include "oslib/os.h"
+#include "oslib/osword.h"
+#include "oslib/territory.h"
 
-//Structure to hold text strings
-typedef struct {
-  char str[32];
-} STRING;
+/* Include SFLib Headers. */
+
+#include "sflib/debug.h"
+#include "sflib/msgs.h"
+
+/* Include local headers. */
 
 #include "main.h"
 
-#define WimpVersion    310
-#define recordstep 50
-#define recordlimit 500
-#define mintext 512
-#define textstep 512
-#define unknown_year -1000000
-#define maxwordsinstring 256
+#include "compiledate.h"
+
+/* ==================================================================================================================
+ * Global Variable Declarations
+ */
+
 static  WimpPollBlock  poll_block;
 static  IdBlock        id_block;
 int *sprite_area,version;
 char monthnames[13][4];
-static int daysinmonth[13]={0,31,29,31,30,31,30,31,31,30,31,30,31};
+static int days_in_month[13]={0,31,29,31,30,31,30,31,31,30,31,30,31};
 static char monthfiles[13][4]={"own","jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"};
 MessagesFD messages[2]; /* = {NULL, NULL}; */
-//FILE *debug;
 WIN_DATA scanwin,srchwin,addwin,editwin;
 
 //Lists of all of the types used by the program, 0=general list
 //1=list for first data set to be joined, 2=list for second data set
-#define maxeventlen 27
-STRING eventlists[3][maxeventlen];
-int lenofeventlists[3],eventlistmaps[3][maxeventlen];
+STRING eventlists[3][MAX_EVENT_LEN];
+int lenofeventlists[3],eventlistmaps[3][MAX_EVENT_LEN];
 
-#define numofwordlists 4
-STRING *wordlist[numofwordlists];
-int wordlistlen[numofwordlists];
+STRING *wordlist[NUM_OF_WORD_LISTS];
+int wordlistlen[NUM_OF_WORD_LISTS];
 int *thesauruslist;
-char wordlisttoken[numofwordlists][3]={{'r','e',0},
-                                       {'i','g',0},
-                                       {'v','b',0},
-                                       {'t','h',0}};
+char wordlisttoken[NUM_OF_WORD_LISTS][3]={{'r','e',0},
+                                          {'i','g',0},
+                                          {'v','b',0},
+                                          {'t','h',0}};
 
 ObjectId iconbar_id,joinwindow,typemenu;
 ComponentId iconbar_component;
@@ -92,7 +82,7 @@ ComponentId iconbar_component;
 int yearwidth,yeartextwidth,monthwidth,daywidth,daytextwidth,typewidth;
 int windowwidth,highlightstate=0;
 int ignoretypes,ignoreyears;
-char todaypaths[2][256];
+char todaypaths[2][TODAY_PATH_LEN];
 
 int scanday,scanmonth,scandayofweek;
 
@@ -102,7 +92,7 @@ char srchstring[64];
 
 WIN_DATA *sortwin[2];
 
-int numofwords[2],stringwords[2][maxwordsinstring];
+int numofwords[2],stringwords[2][MAX_WORDS_IN_STRING];
 char *sortlisttext;
 
 //Lookup table of chars so punctuation is ignored and accents are removed
@@ -154,14 +144,19 @@ const char lookup3[256]={
            'P','Q','R','S','T','U','V','W','X','Y','Z','[','\\',']','^','_',
            '`','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o',
            'p','q','r','s','t','u','v','w','x','y','z','{','|','}','~',127,
-           '€','','‚','ƒ','„','…','†','‡','ˆ','‰','Š','‹','Œ','','Ž','',
-           '','‘','’','“','”','•','–','—','˜','™','š','›','œ','','ž','Ÿ',
-           ' ','¡','¢','£','¤','¥','¦','§','¨','©','ª','«','¬','­','®','¯',
-           '°','±','²','³','´','µ','¶','·','¸','¹','º','»','¼','½','¾','¿',
-           'A','A','A','A','A','A','Æ','C','E','E','E','E','I','I','I','I',
-           'D','N','O','O','O','O','O','×','0','U','U','U','U','Y','P','S',
-           'a','a','a','a','a','a','æ','c','e','e','e','e','i','i','i','i',
-           'd','n','o','o','o','o','o','÷','0','u','u','u','u','y','p','y'};
+           'ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½',
+           'ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½',
+           'ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½',
+           'ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½',
+           'A','A','A','A','A','A','ï¿½','C','E','E','E','E','I','I','I','I',
+           'D','N','O','O','O','O','O','ï¿½','0','U','U','U','U','Y','P','S',
+           'a','a','a','a','a','a','ï¿½','c','e','e','e','e','i','i','i','i',
+           'd','n','o','o','o','o','o','ï¿½','0','u','u','u','u','y','p','y'};
+
+/* ==================================================================================================================
+ *
+ */
+
 
 //Compares two strings
 int caseinsencmp(char *str1,char *str2)
@@ -307,25 +302,25 @@ int parsestring(char *string)
       case '"':
       case '\'':
       case '`':
-      case '´':
-      case '':
-      case '‘':
-      case '”':
-      case '•':
+      case 'ï¿½':
+      case 'ï¿½':
+      case 'ï¿½':
+      case 'ï¿½':
+      case 'ï¿½':
         //Handle quotes
         if (lastchar==32) {
-          nextchar='”';
+          nextchar='ï¿½';
           counter++;
         }
         else
         {
           if (counter>0 && lookup[string[offset1+1]]<=32) {
-            nextchar='•';
+            nextchar='ï¿½';
             counter--;
           }
           else
           {
-            nextchar='‘';
+            nextchar='ï¿½';
           }
         }
         lastchar=string[offset2++]=nextchar;
@@ -480,7 +475,6 @@ int reporterror(char *errortoken,char *str1)
 //This code is called by a Wimp_Quit message, it forces an immediate quit
 int quit_message(WimpMessage *message,void *handle)
 {
-//  fclose(debug);
   _swi(MessageTrans_CloseFile,_IN(0),&messages);
   exit(0);
   return 1;
@@ -567,24 +561,24 @@ int makeroomfordata(WIN_DATA *window,int maximum)
   if (window->records==window->maxrecords) {
     //Need more space for records so increase array
     if (window->recorddata==NULL) {
-      if (flex_alloc((flex_ptr)&window->recorddata,(window->maxrecords+recordstep)*sizeof(REC_DATA))==0) {return reporterror("e1",0);}
+      if (flex_alloc((flex_ptr)&window->recorddata,(window->maxrecords+RECORD_STEP)*sizeof(REC_DATA))==0) {return reporterror("e1",0);}
     }
     else
     {
-      if (flex_extend((flex_ptr)&window->recorddata,(window->maxrecords+recordstep)*sizeof(REC_DATA))==0) {return reporterror("e1",0);}
+      if (flex_extend((flex_ptr)&window->recorddata,(window->maxrecords+RECORD_STEP)*sizeof(REC_DATA))==0) {return reporterror("e1",0);}
     }
-    window->maxrecords+=recordstep;
+    window->maxrecords+=RECORD_STEP;
   }
-  if (window->maxoff-window->curoff<mintext) {
+  if (window->maxoff-window->curoff<MIN_TEXT) {
     //Need more space for text so increase array
     if (window->text==NULL) {
-      if (flex_alloc((flex_ptr)&window->text,(window->maxoff+textstep)*sizeof(char))==0) {return reporterror("e1",0);}
+      if (flex_alloc((flex_ptr)&window->text,(window->maxoff+TEXT_STEP)*sizeof(char))==0) {return reporterror("e1",0);}
     }
     else
     {
-      if (flex_extend((flex_ptr)&window->text,(window->maxoff+textstep)*sizeof(char))==0) {return reporterror("e1",0);}
+      if (flex_extend((flex_ptr)&window->text,(window->maxoff+TEXT_STEP)*sizeof(char))==0) {return reporterror("e1",0);}
     }
-    window->maxoff+=textstep;
+    window->maxoff+=TEXT_STEP;
   }
   return 1;
 }
@@ -610,7 +604,7 @@ int saverecord(FILE *fileptr,REC_DATA *record,WIN_DATA *window)
   {
     sprintf(header+3,"%02d",record->day);
   }
-  if (record->year==unknown_year) {
+  if (record->year==UNKNOWN_YEAR) {
     sprintf(header+5,"    ");
   }
   else
@@ -747,7 +741,7 @@ int loadheader(FILE *fileptr,REC_DATA *record,int listnum)
 
   //Check year
   if (header[5]==' ' && header[6]==' ' && header[7]==' ' && header[8]==' ') {
-    record->year=unknown_year;
+    record->year=UNKNOWN_YEAR;
   }
   else
   {
@@ -865,8 +859,8 @@ int loadnextrecord(FILE *fileptr,WIN_DATA *window,int filenum,int maximum,int li
   if (tempfile==0) {parsestring(window->text+record->textoff);}
 
   //Check that the events have years and reminders do not
-  if (record->type==1 && record->year==unknown_year) {record->type=2;}
-  if (record->type==2 && record->year!=unknown_year) {record->type=1;}
+  if (record->type==1 && record->year==UNKNOWN_YEAR) {record->type=2;}
+  if (record->type==2 && record->year!=UNKNOWN_YEAR) {record->type=1;}
 
   //Set flag for own file
   record->fromown=(filenum==0);
@@ -997,7 +991,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
   int offset1,offset2,letter1,letter2,blank1,blank2,loop,loop2,loop3,loop4,oldcount;
   int wordnum1,wordnum2,matchedinitialtoname,newoffset,newoffset2;
   int oldstart[2],oldend[2],extend,thesauruspos,result=0;
-  char newname[128],ignorable[2][maxwordsinstring];
+  char newname[128],ignorable[2][MAX_WORDS_IN_STRING];
   REC_DATA *records[2];
   records[0]=record1;
   records[1]=record2;
@@ -1005,7 +999,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
   //Build lists of words
   for (loop=0;loop<2;loop++) {
     numofwords[loop]=0;
-    for (offset1=0;numofwords[loop]<maxwordsinstring && sortwin[loop]->text[records[loop]->textoff+offset1]>=32;) {
+    for (offset1=0;numofwords[loop]<MAX_WORDS_IN_STRING && sortwin[loop]->text[records[loop]->textoff+offset1]>=32;) {
       offset1=movetonextword(sortwin[loop]->text+records[loop]->textoff,offset1);
       if (lookup[sortwin[loop]->text[records[loop]->textoff+offset1]]>32) {
         stringwords[loop][numofwords[loop]]=offset1;
@@ -1283,7 +1277,7 @@ int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum,int tempfi
   fprintf(fileptr,"*mmddyyyy Unknown Dates\n");
   fprintf(fileptr,"*-------- ------------------------------------------------------------\n");
   for(loop=0;loop<joindata->records;loop++) {
-    if (joindata->recorddata[loop].year==unknown_year || joindata->recorddata[loop].month<0 || joindata->recorddata[loop].day<0) {
+    if (joindata->recorddata[loop].year==UNKNOWN_YEAR || joindata->recorddata[loop].month<0 || joindata->recorddata[loop].day<0) {
       saverecord(fileptr,&joindata->recorddata[loop],joindata);
       storedtable[loop]=1;
     }
@@ -1825,7 +1819,7 @@ int wildcardmatch(char *str1,char *str2,int casesen)
 int recinrange(REC_DATA *record,int year1,int month1,int day1,int year2,int month2,int day2)
 {
   //If year is unknown count as a match
-  if (record->year==unknown_year) {return 1;}
+  if (record->year==UNKNOWN_YEAR) {return 1;}
   //If year is outside range, set as not match
   if (record->year<year1 || record->year>year2) {return 0;}
 
@@ -1981,14 +1975,14 @@ int editevent(WIN_DATA *win,int flags)
     }
 
     //Add the new event and sort into order
-    if (makeroomfordata(win,recordlimit)==NULL) {
+    if (makeroomfordata(win,RECORD_LIMIT)==NULL) {
       if (win->recorddata!=NULL) {flex_free((flex_ptr)&win->recorddata);}
       if (win->text!=NULL) {flex_free((flex_ptr)&win->text);}
       return NULL;
     }
 
     //Read data for the event into memory block
-    win->recorddata[win->records].year=findnumber(win->window,19,unknown_year);
+    win->recorddata[win->records].year=findnumber(win->window,19,UNKNOWN_YEAR);
     win->recorddata[win->records].month=month;
     win->recorddata[win->records].day=findnumber(win->window,3,0);
     stringset_get_selected(1,win->window,0x28,&win->recorddata[win->records].type);
@@ -1996,8 +1990,8 @@ int editevent(WIN_DATA *win,int flags)
     win->recorddata[win->records].fromown=(curfile==0);
 
     //Check that the events have years and reminders do not
-    if (win->recorddata[win->records].type==1 && win->recorddata[win->records].year==unknown_year) {win->recorddata[win->records].type=2;}
-    if (win->recorddata[win->records].type==2 && win->recorddata[win->records].year!=unknown_year) {win->recorddata[win->records].type=1;}
+    if (win->recorddata[win->records].type==1 && win->recorddata[win->records].year==UNKNOWN_YEAR) {win->recorddata[win->records].type=2;}
+    if (win->recorddata[win->records].type==2 && win->recorddata[win->records].year!=UNKNOWN_YEAR) {win->recorddata[win->records].type=1;}
 
     stringset_get_selected(1,win->window,29,&win->recorddata[win->records].code);
     win->recorddata[win->records].textoff=win->curoff;
@@ -2007,7 +2001,7 @@ int editevent(WIN_DATA *win,int flags)
     //Check if the new event needs to be added to the scan window
     if (testifcorrectdate(&win->recorddata[win->records-1])!=0) {
       //Add to the window and sort the contents
-      if (makeroomfordata(&scanwin,-recordlimit)!=NULL) {
+      if (makeroomfordata(&scanwin,-RECORD_LIMIT)!=NULL) {
         scanwin.recorddata[scanwin.records]=win->recorddata[win->records-1];
         scanwin.recorddata[scanwin.records].textoff=scanwin.curoff;
         sprintf(scanwin.text+scanwin.curoff,"%s",newtext);
@@ -2022,7 +2016,7 @@ int editevent(WIN_DATA *win,int flags)
     //Check if the new event needs to be added to the srch window
     if (srchdone!=0 && searchmatch(win,&win->recorddata[win->records-1])!=0) {
       //Add to the window and sort the contents
-      if (makeroomfordata(&srchwin,-recordlimit)!=NULL) {
+      if (makeroomfordata(&srchwin,-RECORD_LIMIT)!=NULL) {
         srchwin.recorddata[srchwin.records]=win->recorddata[win->records-1];
         srchwin.recorddata[srchwin.records].textoff=srchwin.curoff;
         sprintf(srchwin.text+srchwin.curoff,"%s",newtext);
@@ -2126,7 +2120,6 @@ int altertypes_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void
 //This code is called when quit is selected on the menu
 int menuquit_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
-//  fclose(debug);
   _swi(MessageTrans_CloseFile,_IN(0),&messages);
   exit(0);
   return 1;
@@ -2210,7 +2203,7 @@ int scanfile(int filenum)
 
   //Now cycle through loading records
   do {
-    recresult=loadnextrecord(fileptr,&scanwin,filenum,recordlimit,0,0);
+    recresult=loadnextrecord(fileptr,&scanwin,filenum,RECORD_LIMIT,0,0);
     if (recresult==0) {
       fclose(fileptr);
       return 0;
@@ -2490,7 +2483,7 @@ int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
       recresult=1;
     }
     while (searchresult!=0 && recresult>0) {
-      recresult=loadnextrecord(fileptr,&srchwin,loop,recordlimit,0,0);
+      recresult=loadnextrecord(fileptr,&srchwin,loop,RECORD_LIMIT,0,0);
       if (recresult==0) {searchresult=0;}
       if (recresult>0) {
         //Check if event type is in search mask
@@ -2538,7 +2531,7 @@ int scan_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *hand
 //This code is called when scan today is selected
 int scantoday_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
-  settocurrentdate(scanwin.toolbar,3,1,0);
+  set_to_current_date(scanwin.toolbar,3,1,0);
   beginscan();
   return 1;
 }
@@ -2628,7 +2621,7 @@ int redrawlist(WIN_DATA *window)
         //Display year
         if (displayfield==1 || window->recorddata[loop].year!=window->recorddata[loop-1].year) {
           displayfield=1;
-          if (window->recorddata[loop].year==unknown_year) {
+          if (window->recorddata[loop].year==UNKNOWN_YEAR) {
             sprintf(text,"????");
           }
           else
@@ -2745,12 +2738,12 @@ int deleterecord(int del,int keep)
     //and other record is more specific so copy type of other record
     sortwin[0]->recorddata[keep].type=sortwin[0]->recorddata[del].type;
   }
-  if (sortwin[0]->recorddata[keep].year==unknown_year) {
+  if (sortwin[0]->recorddata[keep].year==UNKNOWN_YEAR) {
     //Copy year if kept record has unknown year
     sortwin[0]->recorddata[keep].year=sortwin[0]->recorddata[del].year;
     //Check that the events have years and reminders do not
-    if (sortwin[0]->recorddata[keep].type==1 && sortwin[0]->recorddata[keep].year==unknown_year) {sortwin[0]->recorddata[keep].type=2;}
-    if (sortwin[0]->recorddata[keep].type==2 && sortwin[0]->recorddata[keep].year!=unknown_year) {sortwin[0]->recorddata[keep].type=1;}
+    if (sortwin[0]->recorddata[keep].type==1 && sortwin[0]->recorddata[keep].year==UNKNOWN_YEAR) {sortwin[0]->recorddata[keep].type=2;}
+    if (sortwin[0]->recorddata[keep].type==2 && sortwin[0]->recorddata[keep].year!=UNKNOWN_YEAR) {sortwin[0]->recorddata[keep].type=1;}
   }
 
 //  memmove(&sortwin[0]->recorddata[del],&sortwin[0]->recorddata[del+1],(sortwin[0]->records-1-del)*sizeof(REC_DATA));
@@ -2762,39 +2755,59 @@ int deleterecord(int del,int keep)
   return 1;
 }
 
-//Loads all of the event types from a messages file
-int loadeventlist(MessagesFD *messages,int listnum)
-{
-  char string[8];
-  _kernel_oserror *error=NULL;
-  int num;
+/* ------------------------------------------------------------------------------------------------------------------ */
 
-  if (messages==NULL) {
-    //Messages file does not exist so set to standard today types
-    sprintf(eventlists[listnum][0].str,"B,Birth");
-    eventlistmaps[listnum][0]=0;
-    sprintf(eventlists[listnum][1].str,"S,Event");
-    eventlistmaps[listnum][1]=1;
-    sprintf(eventlists[listnum][2].str,"R,Reminder");
-    eventlistmaps[listnum][2]=2;
-    sprintf(eventlists[listnum][3].str,"D,Death");
-    eventlistmaps[listnum][3]=3;
-    lenofeventlists[listnum]=4;
+/* Loads all of the event types from a messages file. */
+
+int loadeventlist(MessagesFD *messages, int listnum)
+{
+  char     string[8];
+  os_error *error = NULL;
+  int      i;
+
+  if (messages == NULL)
+  {
+    /* The Messages file does not exist, so the default message types are set up instead. */
+
+    sprintf (eventlists[listnum][0].str, "B,Birth");
+    eventlistmaps[listnum][0] = 0;
+
+    sprintf (eventlists[listnum][1].str, "S,Event");
+    eventlistmaps[listnum][1] = 1;
+
+    sprintf (eventlists[listnum][2].str, "R,Reminder");
+    eventlistmaps[listnum][2] = 2;
+
+    sprintf (eventlists[listnum][3].str, "D,Death");
+    eventlistmaps[listnum][3] = 3;
+
+    lenofeventlists[listnum] = 4;
   }
   else
   {
-    lenofeventlists[listnum]=0;
-    for (num=0;error==NULL && lenofeventlists[listnum]<maxeventlen;num++) {
-      sprintf(string,"ev%d",num);
-      error=_swix(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),messages,string,eventlists[listnum][lenofeventlists[listnum]].str,20);
-      if (error==NULL) {
-        eventlistmaps[listnum][lenofeventlists[listnum]]=lenofeventlists[listnum];
+    /* The Messages file is available, so load the message types in from that. */
+
+    lenofeventlists[listnum] = 0;
+
+    for (i = 0; error == NULL && lenofeventlists[listnum] < MAX_EVENT_LEN; i++)
+    {
+      sprintf (string, "ev%d", i);
+      error = xmessagetrans_lookup ((messagetrans_control_block *) messages, string,
+                                    eventlists[listnum][lenofeventlists[listnum]].str, 20,
+                                    NULL, NULL, NULL, NULL, NULL, NULL);
+
+      if (error == NULL)
+      {
+        eventlistmaps[listnum][lenofeventlists[listnum]] = lenofeventlists[listnum];
         lenofeventlists[listnum]++;
       }
     }
   }
-  return 1;
+
+  return (1);
 }
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 
 //Setup menus with event types
 int setuptypemenus(int oldnumoftypes)
@@ -2881,7 +2894,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
   int loadedevents=0,savedevents=0,possibleduplicates=0,messlinetype;
   int filenum,loop,loop2,loop3,len,result,listnum,listnum2,namesmatch;
   int oldnumoftypes,letter,state,selected,recresult,pathnum;
-  int curtempfile,nexttempfile,savedlinetype[1+numofwordlists];
+  int curtempfile,nexttempfile,savedlinetype[1+NUM_OF_WORD_LISTS];
   char text1[12],text2[12],text3[12],text4[12];
   char filepath[256],filepath2[256],messline[256];
   _kernel_oserror error,*error2;
@@ -2924,7 +2937,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
         //Find position of the event in the combined list
         for (loop2=0;loop2<lenofeventlists[0] && caseinsencmp(eventlists[listnum][loop].str+2,eventlists[0][loop2].str+2)==0;loop2++) {}
         //Do not allow too many events, set to unknown all letters used
-        if (loop2==lenofeventlists[0] && lenofeventlists[0]==maxeventlen) {
+        if (loop2==lenofeventlists[0] && lenofeventlists[0]==MAX_EVENT_LEN) {
           loop2=0;
         }
         eventlistmaps[listnum][loop]=loop2;
@@ -3096,7 +3109,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
 
     //Remove all duplicates
     for (loop=joindata.records-1;loop>0;loop--) {
-      if (joindata.recorddata[loop].year==unknown_year) {
+      if (joindata.recorddata[loop].year==UNKNOWN_YEAR) {
         //Record has an unknown year so check against all events
         loop2=joindata.records-1;
         ignoreyears=1;
@@ -3207,7 +3220,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
     return reporterror("e8",filepath2);
   }
   //Copy all of the data from the old file to the new file
-  for (loop=0;loop<=numofwordlists;loop++) {savedlinetype[loop]=0;}
+  for (loop=0;loop<=NUM_OF_WORD_LISTS;loop++) {savedlinetype[loop]=0;}
   while(feof(fileptr)==0) {
     len=0;
     do {
@@ -3224,7 +3237,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
         if (messline[loop]==':' || messline[loop]<32) {
           //Looks like the string was a list item, so find list number
           if (tolower(messline[0])=='e' && tolower(messline[1])=='v') {messlinetype=0;}
-          for (loop=0;loop<numofwordlists;loop++) {
+          for (loop=0;loop<NUM_OF_WORD_LISTS;loop++) {
             if (tolower(messline[0])==wordlisttoken[loop][0] && tolower(messline[1])==wordlisttoken[loop][1]) {messlinetype=loop+1;}
           }
         }
@@ -3244,7 +3257,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
   }
 
   //Write out any remaining lists that were not saved in correct place
-  for (loop=0;loop<=numofwordlists;loop++) {
+  for (loop=0;loop<=NUM_OF_WORD_LISTS;loop++) {
     if (savedlinetype[loop]==0) {
       savelisttomessages(fileptr2,loop);
     }
@@ -3352,7 +3365,7 @@ int savefile_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
       displayfield=(loop==0);
       if (displayfield==1 || window->recorddata[loop].year!=window->recorddata[loop-1].year) {
         displayfield=1;
-        if (window->recorddata[loop].year==unknown_year) {
+        if (window->recorddata[loop].year==UNKNOWN_YEAR) {
           fprintf(fileptr," ???? ");
         }
         else
@@ -3467,7 +3480,7 @@ int savefile_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
     }
     fputc(10,fileptr);
     for (loop=0;loop<window->records;loop++) {
-      if (window->recorddata[loop].year==unknown_year) {
+      if (window->recorddata[loop].year==UNKNOWN_YEAR) {
         fprintf(fileptr,"\"????\",");
       }
       else
@@ -3610,7 +3623,7 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
           editwin.curoff=offset;
 
           //Now set up the gadgets
-          if (record->year==unknown_year) {
+          if (record->year==UNKNOWN_YEAR) {
             numberrange_get_components(1,editwin.window,19,&writeable,0,0,0);
             writablefield_set_value(0,editwin.window,writeable,"");
           }
@@ -3755,8 +3768,8 @@ int setupwindows(void)
   stringset_set_selected(1,addwin.window,0x28,0);
   menu_remove_entry(0,typemenu,102);
 
-  settocurrentdate(scanwin.toolbar,3,1,0);
-  settocurrentdate(addwin.window,3,1,19);
+  set_to_current_date(scanwin.toolbar,3,1,0);
+  set_to_current_date(addwin.window,3,1,19);
   beginscan();
   justifywindow(&srchwin,0);
 
@@ -3884,7 +3897,7 @@ int loadlists(int numoffiles)
   _kernel_oserror *error;
 
   //Load all of the words
-  for (loop=0;loop<numofwordlists;loop++) {loadlist(loop,numoffiles);}
+  for (loop=0;loop<NUM_OF_WORD_LISTS;loop++) {loadlist(loop,numoffiles);}
 
   //Now create the table saying which words are equivalent
   flex_alloc((flex_ptr)&thesauruslist,wordlistlen[3]*sizeof(int));
@@ -4005,11 +4018,16 @@ int main(int argc,char *argv[])
     //Copy data path into block so it cannot be corrupted by other copies
     len=_swi(OS_ReadVarVal,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_RETURN(2),"Today$Dir",todaypaths[0],256,0,0);
 
-    //initialise the flex library.
+    /* Initialise the flex library. */
+
     flex_init("Today",0, 0);
 
-    //register ourselves with the Toolbox.
-    toolbox_initialise (0, WimpVersion, wimp_messages, toolbox_events, "<Today$Dir>",&messages[0], &id_block, &version, 0, (void **)&sprite_area);
+    /* Register ourselves with the Toolbox, then pass details of the Messages block on to the msgs library. */
+
+    toolbox_initialise (0, WIMP_VERSION, wimp_messages, toolbox_events, "<Today$Dir>", &messages[0],
+                        &id_block, &version, 0, (void **)&sprite_area);
+
+    msgs_external_init ((messagetrans_control_block *) messages);
 
     //initialise the event library.
     event_initialise (&id_block);
@@ -4042,7 +4060,7 @@ int main(int argc,char *argv[])
     event_register_toolbox_handler(-1,SaveAs_AboutToBeShown,showingsaveas_event,0);
     event_register_toolbox_handler(-1,SaveAs_SaveToFile,savefile_event,0);
     event_register_toolbox_handler(-1,StringSet_ValueChanged,stringchanged_event,0);
-    event_register_toolbox_handler(-1,Toolbox_ObjectAutoCreated,createibar_event,0);
+    event_register_toolbox_handler(-1, Toolbox_ObjectAutoCreated, object_created_event, 0);
     event_register_message_handler(Wimp_MDataLoad,draggingjoinfile_message,0);
     event_register_message_handler(Wimp_MFontChanged,fontchange_message,0);
     event_register_message_handler(Wimp_MModeChange,modechange_message,0);

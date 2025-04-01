@@ -1,3 +1,81 @@
+/* Today - main.h
+ *
+ * Today - the revised version
+ * Originally written by James Miskin
+ * Updated for 32-bit by Stephen Fryatt
+ */
+
+/* ==================================================================================================================
+ * Constant Definitions
+ */
+
+#define WIMP_VERSION 310
+
+#define TODAY_PATH_LEN 256
+#define MAX_EVENT_LEN 27
+#define NUM_OF_WORD_LISTS 4
+
+#define RECORD_STEP 50
+#define RECORD_LIMIT 500
+#define MIN_TEXT 512
+#define TEXT_STEP 512
+#define MAX_WORDS_IN_STRING 256
+
+#define UNKNOWN_YEAR (-1000000)
+
+/* ==================================================================================================================
+ * Structure Definitions
+ */
+
+/* Structure to hold data for a record. */
+
+typedef struct
+{
+  int year;       /* If year is UNKNOWN_YEAR, it is unknown.                */
+  int month;      /* If month is 0 it matches all months; if <0 is unknown. */
+  int day;        /* If day is 0 it matches all days; if <0 is unknown.     */
+  int type;
+  int code;       /* 1-7 for days; 8 for continuous; 0 otherwise.           */
+  int startline;
+  int endline;
+  int fromown;
+  int textoff;
+}
+REC_DATA;
+
+
+/* Structure to hold information for a list of records. */
+
+typedef struct
+{
+  ObjectId window;
+  ObjectId toolbar;
+
+  int      records;
+  int      maxrecords;
+  int      toolbarheight;
+  int      listdates;     /* listdates flag is nonzero if month and day are to be listed in window. */
+  REC_DATA *recorddata;
+
+  char     *text;         /* This block stores all the text for the window.                         */
+  int      curoff;
+  int      maxoff;
+}
+WIN_DATA;
+
+
+/* Structure to hold text strings. */
+
+typedef struct
+{
+  char str[32];
+}
+STRING;
+
+/* ==================================================================================================================
+ * Function Prototypes
+ */
+
 extern int addeventtolist            (WIN_DATA *window);
 extern int addnew_event              (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
 extern int adjustibar_event          (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
@@ -12,7 +90,7 @@ extern int comparestrings            (REC_DATA *r1,REC_DATA *r2);
 extern int comparewordlist           (const void *e1,const void *e2);
 extern int comparewords              (char *str1,char *str2,int verbcheck,int termchar1,int termchar2);
 extern int comparewordswiththesaurus (char *str1,int thespos1,char *str2,int thespos2);
-extern int createibar_event          (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
+extern int object_created_event      (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
 extern int createrecwindow           (char *winname,char *toolname,WIN_DATA *win);
 extern int delete_event              (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
 extern int deleterecord              (int del,int keep);
@@ -67,7 +145,7 @@ extern int searchmatch               (WIN_DATA *win,REC_DATA *record);
 extern int selectall_event           (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
 extern int selectibar_event          (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
 extern int selectnone_event          (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
-extern int settocurrentdate          (ObjectId window,ComponentId day,ComponentId month,ComponentId year);
+extern int set_to_current_date          (ObjectId window,ComponentId day,ComponentId month,ComponentId year);
 extern int setuptypemenus            (int oldnumoftypes);
 extern int setupwindows              (void);
 extern int showingsaveas_event       (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
