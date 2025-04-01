@@ -8,6 +8,8 @@
 #include "swis.h"
 #include "flex.h"
 
+#include "sflib/debug.h"
+
 //Include the toolbox stuff
 #include "colourdbox.h"
 #include "dcs.h"
@@ -65,7 +67,7 @@ int *sprite_area,version;
 char monthnames[13][4];
 static int daysinmonth[13]={0,31,29,31,30,31,30,31,31,30,31,30,31};
 static char monthfiles[13][4]={"own","jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"};
-MessagesFD messages[2]={NULL,NULL};
+MessagesFD messages[2]; /* = {NULL, NULL}; */
 //FILE *debug;
 WIN_DATA scanwin,srchwin,addwin,editwin;
 
@@ -79,10 +81,10 @@ int lenofeventlists[3],eventlistmaps[3][maxeventlen];
 STRING *wordlist[numofwordlists];
 int wordlistlen[numofwordlists];
 int *thesauruslist;
-char wordlisttoken[numofwordlists][3]={'r','e',0,
-                                       'i','g',0,
-                                       'v','b',0,
-                                       't','h',0};
+char wordlisttoken[numofwordlists][3]={{'r','e',0},
+                                       {'i','g',0},
+                                       {'v','b',0},
+                                       {'t','h',0}};
 
 ObjectId iconbar_id,joinwindow,typemenu;
 ComponentId iconbar_component;
@@ -973,7 +975,7 @@ int readnextinitial(int num,REC_DATA *record,int *wordnum,int *offset,int *blank
   letter=lookup2[sortwin[num]->text[record->textoff+stringwords[num][*wordnum]+((*offset)++)]];
 
   //Check to see if the letter following the initial is lowercase
-  if (lookup2[sortwin[num]->text[record->textoff+stringwords[num][*wordnum]+(*offset)]]==2) {(*offset)=-(*offset);} 
+  if (lookup2[sortwin[num]->text[record->textoff+stringwords[num][*wordnum]+(*offset)]]==2) {(*offset)=-(*offset);}
   return letter;
 }
 
@@ -1043,7 +1045,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
 
                 for (loop3=loop;loop3<wordnum1;loop3++) {stringwords[0][loop3]=-1;}
                 for (loop3=loop2;loop3<wordnum2;loop3++) {stringwords[1][loop3]=-1;}
-  
+
                 //Stop looking for matches
                 loop2=numofwords[1];
 
@@ -1066,10 +1068,10 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                 }
                 break;
               }
-  
+
               //See if either of the strings have terminated or letters do not match
               if (letter1<=2|| letter2<=2 || letter1!=letter2) {break;}
-  
+
               //See if last letters were start of words
               if (offset1<0) {
                 if (offset2<0) {
@@ -1146,14 +1148,14 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                         }
                       }
                     }
-  
+
                     //Set all used words so they are not looked at later
                     for (loop3=loop;loop3<=wordnum1;loop3++) {stringwords[0][loop3]=-1;}
                     for (loop3=loop2;loop3<=wordnum2;loop3++) {stringwords[1][loop3]=-1;}
-  
+
                     //Stop looking for matches
                     loop2=numofwords[1];
-    
+
                     //Set result so that calling routine knows match is found
                     if (result==0) {
                       for (loop3=loop;loop3<=wordnum1;loop3++) {
@@ -1172,7 +1174,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                       }
                     }
                   }
-  
+
                   //Now stop at the match
                   break;
                 }
@@ -1191,7 +1193,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
               }
             } while (1);
           }
-        } 
+        }
       }
     }
   }
@@ -1226,7 +1228,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
     sortlisttext=sortwin[loop]->text+records[loop]->textoff;
     qsort((void *)stringwords[loop],(size_t)numofwords[loop],sizeof(int),comparewords2);
   }
-  
+
   return result;
 }
 
@@ -1540,7 +1542,7 @@ int justifywindow(WIN_DATA *window,int reopen)
 //Tests if the record is on the correct date, returns 1 if it is
 int testifcorrectdate(REC_DATA *record)
 {
-  if (record->month>0 && record->month!=scanmonth) {return 0;} 
+  if (record->month>0 && record->month!=scanmonth) {return 0;}
   if (record->day>0 && record->day!=scanday) {return 0;}
   if (record->code!=0 && record->code!=scandayofweek) {return 0;}
   return 1;
@@ -1646,7 +1648,7 @@ int decode_symbol(char *str,int *len,int inset)
           return str[1];
           break;
         case '~':
-          //Check for not a character  
+          //Check for not a character
           if (inset==0) {return 2001;}
           break;
         case '&':
@@ -1692,7 +1694,7 @@ int findcharinset(char c,char *set,int *len)
       switch (c2) {
         case 1003:
           //Check for a single character
-          if (c>=32) {return 1;} 
+          if (c>=32) {return 1;}
           break;
         case 1002:
           //Check for an alphanumeric character
@@ -1733,7 +1735,7 @@ int findcharinset(char c,char *set,int *len)
     switch (c2) {
       case 1003:
         //Check for a single character
-        if (c>=32) {return 1;} 
+        if (c>=32) {return 1;}
         break;
       case 1002:
         //Check for an alphanumeric character
@@ -1756,7 +1758,7 @@ int findcharinset(char c,char *set,int *len)
         if (c==c2) {return 1;}
         break;
     }
-  }     
+  }
   return 0;
 }
 
@@ -1771,7 +1773,7 @@ int wildcardmatch(char *str1,char *str2,int casesen)
     //Run through second string
     off3=0;
     for (off2=0;;off2++) {
-      char1=str1[off1+off2]; 
+      char1=str1[off1+off2];
       //Remove accents from letters
       char1=lookup3[char1];
       if (casesen==0) {char1=toupper(char1);}
@@ -1788,7 +1790,7 @@ int wildcardmatch(char *str1,char *str2,int casesen)
           return wildcardmatch(str1+off1+off2,str2+off3+2,casesen);
           break;
         case 2001:
-          //Check for not a character  
+          //Check for not a character
           off3+=2;
           failed=findcharinset(char1,str2+off3,&len);
           break;
@@ -1797,7 +1799,7 @@ int wildcardmatch(char *str1,char *str2,int casesen)
           //Check for 0/1 or more of a character
           off3+=2;
           for (off4=off2;;off2++) {
-            char1=str1[off1+off2]; 
+            char1=str1[off1+off2];
             //Remove accents from letters
             char1=lookup3[char1];
             if (casesen==0) {char1=toupper(char1);}
@@ -1867,7 +1869,7 @@ int searchmatch(WIN_DATA *win,REC_DATA *record)
 }
 
 //Routine to perform editing on data files
-//If bit 0 is set a delete is performed, if bit 1 an add is performed 
+//If bit 0 is set a delete is performed, if bit 1 an add is performed
 int editevent(WIN_DATA *win,int flags)
 {
   int curfile=-1,loop,offset,offset2,nextfile,state,onradio,month;
@@ -1992,11 +1994,11 @@ int editevent(WIN_DATA *win,int flags)
     stringset_get_selected(1,win->window,0x28,&win->recorddata[win->records].type);
     win->recorddata[win->records].type++;
     win->recorddata[win->records].fromown=(curfile==0);
-  
+
     //Check that the events have years and reminders do not
     if (win->recorddata[win->records].type==1 && win->recorddata[win->records].year==unknown_year) {win->recorddata[win->records].type=2;}
     if (win->recorddata[win->records].type==2 && win->recorddata[win->records].year!=unknown_year) {win->recorddata[win->records].type=1;}
-  
+
     stringset_get_selected(1,win->window,29,&win->recorddata[win->records].code);
     win->recorddata[win->records].textoff=win->curoff;
     sprintf(win->text+win->curoff,"%s",newtext);
@@ -2095,7 +2097,7 @@ int delete_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
   error.errnum=0;
   _swi(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages,"e7",error.errmess,252);
   if (_swi(Wimp_ReportError,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_IN(5)|_RETURN(1),&error,1+2+4+(1<<8)+(4<<9),"Today",0,1,0)==2) {return 1;}
-  
+
   //Call routine to delete event in editwin and not add a new event
   editevent(&editwin,1);
   toolbox_hide_object(0,editwin.window);
@@ -2143,7 +2145,7 @@ int fixtoolbar(WIN_DATA *win,char *toolname)
   wintemp=objheader->body;
   win->toolbarheight=wintemp->window.visible_area.ymax-wintemp->window.visible_area.ymin;
   wintemp->window.visible_area.xmax=wintemp->window.visible_area.xmin+100000;
-  
+
   //Create toolbar window and set as a toolbar
   toolbox_create_object(1,objheader,&win->toolbar);
   window_set_tool_bars(2,win->window,0,win->toolbar,0,0);
@@ -2199,7 +2201,7 @@ int scanfile(int filenum)
   FILE *fileptr;
   char filename[256];
   int recresult;
-  
+
   //Open the file
   sprintf(filename,"%s.TodayData.%s",todaypaths[0],monthfiles[filenum]);
   fileptr=fopen(filename,"rb");
@@ -2248,7 +2250,7 @@ int draggingjoinfile_message(WimpMessage *message,void *handle)
     }
   }
 
-  
+
   return 1;
 }
 
@@ -2339,10 +2341,10 @@ int beginscan(void)
 
 //This routine checks if the string pointed to is a valid set
 //Returns the length or -ve if invalid
-int check_valid_set(char *str) 
+int check_valid_set(char *str)
 {
   int len,len2,c;
-  
+
   if (str[0]=='[') {
     //Start of a set
     for (len=1;str[len]!=']';) {
@@ -2362,7 +2364,7 @@ int check_valid_set(char *str)
     len++;
   }
   else
-  {   
+  {
     //Single magic symbol
     c=decode_symbol(str,&len,1);
     if (c<0) {return -1;}
@@ -2393,7 +2395,7 @@ int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
   }
   //Put terminator after last non-space
   newsrch[offset3++]=0;
-  
+
   //Check that all magic characters are valid
   for (offset=0;offset<offset3;) {
     char2=decode_symbol(newsrch+offset,&len,0);
@@ -2464,7 +2466,7 @@ int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
     srchstring[offset]=nextchar;
   }
   srchstring[offset++]=0;
-  
+
   optionbutton_get_state(0,srchwin.toolbar,11,&srchrange);
   numberrange_get_value(0,srchwin.toolbar,19,&srchyear1);
   stringset_get_selected(1,srchwin.toolbar,15,&srchmonth1);
@@ -2642,7 +2644,7 @@ int redrawlist(WIN_DATA *window)
           placetext(text,x,y,yeartextwidth);
         }
         x+=yearwidth;
-  
+
         //Only display date in the search window
         if (window->listdates!=0) {
           //Display month
@@ -2672,11 +2674,11 @@ int redrawlist(WIN_DATA *window)
           }
           x+=daywidth;
         }
-  
+
         //Display type
         placetext(eventlists[0][window->recorddata[loop].type].str+2,x,y,0);
         x+=typewidth;
-        
+
         //Display event
         string=window->text+window->recorddata[loop].textoff;
         do {
@@ -2723,7 +2725,7 @@ int highlight_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void 
   window_force_redraw(0,srchwin.window,&extent);
   return 1;
 }
-  
+
 //Sets shaded items in save menu
 int openingsave_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
@@ -3584,7 +3586,7 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
       for (loop=0;record==NULL && loop<butwin->records;loop++) {
         if (row>=butwin->recorddata[loop].startline && row<=butwin->recorddata[loop].endline) {record=&butwin->recorddata[loop];}
       }
-  
+
       if (record!=NULL) {
         if (event->mouse_click.buttons==1) {
           //Want to edit the event so open the edit window
@@ -3606,7 +3608,7 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
           }
           editwin.text[offset++]=0;
           editwin.curoff=offset;
-  
+
           //Now set up the gadgets
           if (record->year==unknown_year) {
             numberrange_get_components(1,editwin.window,19,&writeable,0,0,0);
@@ -3635,11 +3637,12 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
           stringset_set_selected(1,editwin.window,29,(char *)(record->code));
           radiobutton_set_state(0,editwin.window,0x1a,1-record->fromown);
           radiobutton_set_state(0,editwin.window,0x1b,record->fromown);
-  
+
           offset=0;
           for (loop=0x22;loop<=0x26;loop++) {
             //Find end of the next row
             offset2=offset;
+            offset3=offset2; /* Added by SF -- appears uninitialised? */
             for (;editwin.text[offset2]>=32 && (offset2-offset)<80;offset2++) {
               if (editwin.text[offset2]==32) {offset3=offset2;}
             }
@@ -3656,7 +3659,7 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
               offset=offset3;
             }
           }
-  
+
           toolbox_show_object(0,editwin.window,0,0,iconbar_id,iconbar_component);
         }
         else
@@ -3679,7 +3682,7 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
               for (;string[offset]>=32;offset++) {}
               offset++;
             }
-      
+
             offset3=offset;
             do {
               //Move to first terminator of letter
@@ -3687,7 +3690,7 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
               if (string[offset2]>=32) {
                 //Found start of a word so now find the end of it
                 for (offset3=offset2+1;lookup[string[offset3]]>32;offset3++) {}
-      
+
                 //Find the left and right edges of the word
                 if (version>=350) {
                   if (offset2>offset) {
@@ -3704,11 +3707,11 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
                   left=(offset2-offset)*16;
                   right=(offset3-offset)*16;
                 }
-      
+
                 if (textoff>=left && textoff<=right) {match=1;}
               }
             } while (match==0 && string[offset2]>=32);
-      
+
             //If word is matched, open the search window
             if (match==1) {
               termchar=string[offset3];
@@ -3929,7 +3932,7 @@ int loadlists(int numoffiles)
               }
               equalpos=nextpos;
             }
-            
+
             //Set the word that this word is equal to (lowest in list)
             thesauruslist[nextpos]=equalpos;
           }
@@ -3998,11 +4001,12 @@ int main(int argc,char *argv[])
 //      exit(0);
 //    }
 
+
     //Copy data path into block so it cannot be corrupted by other copies
     len=_swi(OS_ReadVarVal,_IN(0)|_IN(1)|_IN(2)|_IN(3)|_IN(4)|_RETURN(2),"Today$Dir",todaypaths[0],256,0,0);
 
     //initialise the flex library.
-    flex_init("Today",0);
+    flex_init("Today",0, 0);
 
     //register ourselves with the Toolbox.
     toolbox_initialise (0, WimpVersion, wimp_messages, toolbox_events, "<Today$Dir>",&messages[0], &id_block, &version, 0, (void **)&sprite_area);
@@ -4052,7 +4056,7 @@ int main(int argc,char *argv[])
 
     //Load all of the event names from messages file
     loadeventlist(&messages[0],0);
-  
+
     loadlists(1);
 
     //Set size of screen data
