@@ -26,7 +26,7 @@ t6:Loaded %0 events and removed %1 duplicates leaving %2 events. Found %3 events
 Error messages
 e1:There is not enough memory to complete that operation. Please free some memory before trying again.
 e2:There are too many events matching those criteria. Please be more specific before repeating that search.
-e3:Couldn't open the '%0' to save data to.
+e3:Couldn't open file '%0' to save data to.
 e4:Couldn't open file '%0'.
 e5:There is no text describing the event.
 e6:You must specify a day of the month before scanning.
@@ -49,26 +49,29 @@ re8:FOURTH,4th
 re9:GEMANY,Germany
 re10:GUINESS,Guinness
 re11:INDEPENDANCE,independence
-re12:LTALY,Italy
-re13:METEREOLOGICAL,meteorological
-re14:NINE,9
-re15:ONE,1
-re16:OVERTTHROWN,overthrown
-re17:PERFOMED,performed
-re18:SECOND,2nd
-re19:SEIGE,siege
-re20:SEVEN,7
-re21:SIX,6
-re22:TELEVISION,TV
-re23:TEN,10
-re24:THIRD,3rd
-re25:THREE,3
-re26:TWO,2
-re27:ULYSSSES,Ulysses
-re28:UNITED NATIONS,UN
-re29:UNITED STATES,US
-re30:UNITED STATES OF AMERICA,US
-re31:USA,US
+re12:LISTZ,Liszt
+re13:LTALY,Italy
+re14:MANILLA,Manila
+re15:METEREOLOGICAL,meteorological
+re16:NINE,9
+re17:ONDON,London
+re18:ONE,1
+re19:OVERTTHROWN,overthrown
+re20:PERFOMED,performed
+re21:SECOND,2nd
+re22:SEIGE,siege
+re23:SEVEN,7
+re24:SIX,6
+re25:TELEVISION,TV
+re26:TEN,10
+re27:THIRD,3rd
+re28:THREE,3
+re29:TWO,2
+re30:ULYSSSES,Ulysses
+re31:UNITED NATIONS,UN
+re32:UNITED STATES,US
+re33:UNITED STATES OF AMERICA,US
+re34:USA,US
 
 Words to be ignored when comparing whether or not two strings contain the same information
 Must be upper case unless you want to use the verb endings when matching to these strings
@@ -77,15 +80,18 @@ ig2:A
 ig3:AN
 ig4:AND
 ig5:ARE
-ig6:BY
-ig7:IN
-ig8:IS
-ig9:OF
-ig10:S
-ig11:THE
-ig12:TO
-ig13:WAS
-ig14:WERE
+ig6:AS
+ig7:BY
+ig8:FORMER
+ig9:IN
+ig10:IS
+ig11:OF
+ig12:S
+ig13:THE
+ig14:TO
+ig15:WAS
+ig16:WERE
+
 
 Verb endings, these are used when comparing words. If the words are the same apart from their endings
 (and the endings are in this list) the words are taken to be the same
@@ -102,24 +108,29 @@ vb7:Y
 Thesaurus, words that are to be treated as equivalent, separated by an '_'
 Must be upper case unless you want to use the verb endings when matching to these strings
 (ie lowercase unless initials)
-th1:actor_actress_megastar_singer_star
+th1:actor_actress_bass_megastar_singer_soprano_star_tenor
 th2:America_US
-th3:author_novelist_writer
-th4:bandleader_orchestra leader
-th5:battleship_destroyer
-th6:became_become
-th7:began_begun_start
-th8:beheaded_executed_hanged
-th9:Britain_England_UK
-th10:burned_burnt
-th11:dramatist_playwright
-th12:gardener_horticulturalist
-th13:made_manufactured
-th14:marine_troop
-th15:mexican_mexico
-th16:perform_performance_premiere_produce_production_stage
-th17:pop_popular
-th18:print_publish
+th3:army_forces_marine_troop
+th4:author_novelist_writer
+th5:bandleader_orchestra leader
+th6:battleship_destroyer
+th7:became_become
+th8:began_begun_start
+th9:beheaded_executed_hanged_murdered_shot
+th10:Britain_England_UK
+th11:burned_burnt
+th12:dramatist_playwright
+th13:enter_invade
+th14:freed_released
+th15:gardener_horticulturalist
+th16:inaugural_maiden
+th17:lunar_moon
+th18:made_manufactured
+th19:mexican_mexico
+th20:open_perform_performance_premiere_produce_production_stage
+th21:opera_operatic
+th22:pop_popular
+th23:print_publish
 
 Event types, format is code letter, type name, must finish with a new line
 ev0:?,?????

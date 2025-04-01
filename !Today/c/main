@@ -77,7 +77,7 @@ int lenofeventlists[3],eventlistmaps[3][maxeventlen];
 
 STRING *wordlist[4];
 int wordlistlen[4];
-char *thesaurustable;
+int *thesauruslist;
 
 ObjectId iconbar_id,joinwindow,typemenu;
 ComponentId iconbar_component;
@@ -95,7 +95,8 @@ char srchstring[64];
 
 WIN_DATA *sortwin[2];
 
-int numofwords[2],wordptrs[2][maxwordsinstring];
+int numofwords[2],wordptrs[2][maxwordsinstring][2];
+char *sortlisttext;
 
 int tempcount1,tempcount2,tempcount3;
 
@@ -191,7 +192,7 @@ int comparewords(char *str1,char *str2,int verbcheck,int termchar1,int termchar2
 
   //Check if verb check is to be done
   //Do not do a verb check if at a space and not terminating on spaces
-  if (verbcheck!=0 && (c1!=' ' || termchar1==32) && (c2!=' ' || termchar2==32)) {
+  if (offset>1 && verbcheck!=0 && (c1!=' ' || termchar1==32) && (c2!=' ' || termchar2==32)) {
     //If not at the end of each word, see if remaining bit is in list of verb endings
     if ((c1<=32 || findwordinlist(str1+offset-1,2,0)>=0) && (c2<=32 || findwordinlist(str2+offset-1,2,0)>=0)) {return 0;}
   }
@@ -239,22 +240,37 @@ int findwordinlist(char *string,int num,int verbcheck)
 
 //Routine to test words at start of strings are same, if verbcheck is non-zero and words do not match it checks to see
 //if the endings are in the verb list
-int comparewordswiththesaurus(char *str1,char *str2)
+int comparewordswiththesaurus(char *str1,int thespos1,char *str2,int thespos2)
 {
-  int pos1,pos2;
-  if (comparewords(str1,str2,1,32,32)==0) {return 0;}
+  int termchar[2];
+  char *word[2];
 
-  //Check if the first word is in the thesaurus
-  pos1=findwordinlist(str1,3,1);
-  if (pos1>=0) {
-    //Run through all the words equivalent to pos1 and see if they match str2
-    for (pos2=0;pos2<wordlistlen[3];pos2++) {
-      if (thesaurustable[pos1*wordlistlen[3]+pos2]!=0) {
-        if (comparewords(str2,wordlist[3][pos2].str,1,32,31)==0) {return 0;}
-      }
-    }
+  if (thespos1>=0 && thespos2>=0) {
+    //Both words are in thesaurus so check is easy
+    if (thespos1>thespos2) {return 2;}
+    if (thespos1<thespos2) {return -2;}
+    return 0;
   }
-  return 2;
+
+  if (thespos1>=0) {
+    word[0]=wordlist[3][thespos1].str;
+    termchar[0]=31;
+  }
+  else
+  {
+    word[0]=str1;
+    termchar[0]=32;
+  }
+  if (thespos2>=0) {
+    word[1]=wordlist[3][thespos2].str;
+    termchar[1]=31;
+  }
+  else
+  {
+    word[1]=str2;
+    termchar[1]=32;
+  }
+  return comparewords(word[0],word[1],1,termchar[0],termchar[1]);
 }
 
 //Parse string by removing hard spaces, doubles/leading/trailing spaces
@@ -932,7 +948,7 @@ int readnextinitial(int num,REC_DATA *record,int *wordnum,int *offset,int *blank
   *blank=0;
 
   //if next letter is a blank or last initial was start of a word, move to next word
-  if ((*offset)<0 || lookup[sortwin[num]->text[record->textoff+wordptrs[num][*wordnum]+(*offset)]]<=32) {
+  if ((*offset)<0 || lookup[sortwin[num]->text[record->textoff+wordptrs[num][*wordnum][0]+(*offset)]]<=32) {
     *blank=1;
 
     (*wordnum)++;
@@ -942,22 +958,52 @@ int readnextinitial(int num,REC_DATA *record,int *wordnum,int *offset,int *blank
     if (*wordnum>=numofwords[num]) {return 0;}
 
     //If next word has already been used stop
-    if (wordptrs[num][*wordnum]<0) {return 1;}
+    if (wordptrs[num][*wordnum][0]<0) {return 1;}
   }
 
   //Find the next letter, know that it must be alphanumeric but it could be lower case
-  letter=lookup2[sortwin[num]->text[record->textoff+wordptrs[num][*wordnum]+((*offset)++)]];
+  letter=lookup2[sortwin[num]->text[record->textoff+wordptrs[num][*wordnum][0]+((*offset)++)]];
 
   //Check to see if the letter following the initial is lowercase
-  if (lookup2[sortwin[num]->text[record->textoff+wordptrs[num][*wordnum]+(*offset)]]==2) {(*offset)=-(*offset);} 
+  if (lookup2[sortwin[num]->text[record->textoff+wordptrs[num][*wordnum][0]+(*offset)]]==2) {(*offset)=-(*offset);} 
   return letter;
+}
+
+//Routine to compare words into alphabetical order
+int comparewords2(const void *e1,const void *e2)
+{
+  int *r[2],termchar[2],loop;
+  char *word[2];
+  r[0]=(int *)e1;
+  r[1]=(int *)e2;
+
+  if (r[0][1]>=0 && r[1][1]>=0) {
+    //Both words are in thesaurus so check is easy
+    if (r[0][1]>r[1][1]) {return 2;}
+    if (r[0][1]<r[1][1]) {return -2;}
+    return 0;
+  }
+
+  for (loop=0;loop<2;loop++) {
+    if (r[loop][1]>=0) {
+      word[loop]=wordlist[3][r[loop][1]].str;
+      termchar[loop]=31;
+    }
+    else
+    {
+      //Word is not in the thesaurus so set pointer to word in string
+      word[loop]=sortlisttext+r[loop][0];
+      termchar[loop]=32;
+    }
+  }
+  return comparewords(word[0],word[1],0,termchar[0],termchar[1]);
 }
 
 int makelistofwords(REC_DATA *record1,REC_DATA *record2)
 {
   int offset1,offset2,letter1,letter2,blank1,blank2,loop,loop2,loop3,loop4,oldcount;
   int index,wordnum1,wordnum2,matchedinitialtoname,newoffset,newoffset2;
-  int oldstart[2],oldend[2],extend;
+  int oldstart[2],oldend[2],extend,thesauruspos;
   char newname[128];
   REC_DATA *records[2];
   records[0]=record1;
@@ -969,7 +1015,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
     for (offset1=0;numofwords[loop]<maxwordsinstring && sortwin[loop]->text[records[loop]->textoff+offset1]>=32;) {
       offset1=movetonextword(sortwin[loop]->text+records[loop]->textoff,offset1);
       if (lookup[sortwin[loop]->text[records[loop]->textoff+offset1]]>32) {
-        wordptrs[loop][numofwords[loop]++]=offset1;
+        wordptrs[loop][numofwords[loop]++][0]=offset1;
         offset1=movetoendofword(sortwin[loop]->text+records[loop]->textoff,offset1);
       }
     }
@@ -977,11 +1023,11 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
 
   //Now check for any initials
   for (loop=0;loop<numofwords[0];loop++) {
-    if (wordptrs[0][loop]>=0) {
+    if (wordptrs[0][loop][0]>=0) {
       //Check if this word starts with an upper case letter
-      if (lookup2[sortwin[0]->text[records[0]->textoff+wordptrs[0][loop]]]>32) {
+      if (lookup2[sortwin[0]->text[records[0]->textoff+wordptrs[0][loop][0]]]>32) {
         for (loop2=0;loop2<numofwords[1];loop2++) {
-          if (wordptrs[1][loop2]>=0) {
+          if (wordptrs[1][loop2][0]>=0) {
             //See if the initials match initials in string2
             offset1=offset2=0;
             wordnum1=loop;
@@ -993,8 +1039,8 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
               if (blank1==1 && blank2==1 && matchedinitialtoname==0) {
                 //Both sets of initials have reached a blank and have not matched an inital to a name
                 //so they must match
-                for (loop3=loop;loop3<wordnum1;loop3++) {wordptrs[0][loop3]=-1;}
-                for (loop3=loop2;loop3<wordnum2;loop3++) {wordptrs[1][loop3]=-1;}
+                for (loop3=loop;loop3<wordnum1;loop3++) {wordptrs[0][loop3][0]=-1;}
+                for (loop3=loop2;loop3<wordnum2;loop3++) {wordptrs[1][loop3][0]=-1;}
   
                 //Stop looking for matches
                 loop2=numofwords[1];
@@ -1008,7 +1054,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
               if (offset1<0) {
                 if (offset2<0) {
                   //Both letters were the start of words so compare the strings
-                  if (comparewords(sortwin[0]->text+records[0]->textoff+wordptrs[0][wordnum1]-offset1,sortwin[1]->text+records[1]->textoff+wordptrs[1][wordnum2]-offset2,0,32,32)==0) {
+                  if (comparewords(sortwin[0]->text+records[0]->textoff+wordptrs[0][wordnum1][0]-offset1,sortwin[1]->text+records[1]->textoff+wordptrs[1][wordnum2][0]-offset2,0,32,32)==0) {
                     //Build the new name to replace the old initials
                     if (matchedinitialtoname!=0) {
                       newoffset=0;
@@ -1022,8 +1068,8 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                           if (offset2>=0) {
                             newoffset2=-offset1-1;
                             do {
-                              newname[newoffset++]=sortwin[0]->text[records[0]->textoff+wordptrs[0][wordnum1]+newoffset2++];
-                            } while (lookup[sortwin[0]->text[records[0]->textoff+wordptrs[0][wordnum1]+newoffset2]]>32);
+                              newname[newoffset++]=sortwin[0]->text[records[0]->textoff+wordptrs[0][wordnum1][0]+newoffset2++];
+                            } while (lookup[sortwin[0]->text[records[0]->textoff+wordptrs[0][wordnum1][0]+newoffset2]]>32);
                             newname[newoffset++]=32;
                           }
                         }
@@ -1032,8 +1078,8 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                           if (offset2<0) {
                             newoffset2=-offset2-1;
                             do {
-                              newname[newoffset++]=sortwin[1]->text[records[1]->textoff+wordptrs[1][wordnum2]+newoffset2++];
-                            } while (lookup[sortwin[1]->text[records[1]->textoff+wordptrs[1][wordnum2]+newoffset2]]>32);
+                              newname[newoffset++]=sortwin[1]->text[records[1]->textoff+wordptrs[1][wordnum2][0]+newoffset2++];
+                            } while (lookup[sortwin[1]->text[records[1]->textoff+wordptrs[1][wordnum2][0]+newoffset2]]>32);
                             newname[newoffset++]=32;
                           }
                           else
@@ -1045,10 +1091,10 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                         }
                       } while (offset1>=0 || offset2>=0);
                       newname[newoffset]=0;
-                      oldstart[0]=wordptrs[0][loop];
-                      oldend[0]=wordptrs[0][wordnum1]-offset1-1;
-                      oldstart[1]=wordptrs[1][loop2];
-                      oldend[1]=wordptrs[1][wordnum2]-offset2-1;
+                      oldstart[0]=wordptrs[0][loop][0];
+                      oldend[0]=wordptrs[0][wordnum1][0]-offset1-1;
+                      oldstart[1]=wordptrs[1][loop2][0];
+                      oldend[1]=wordptrs[1][wordnum2][0]-offset2-1;
 
                       fprintf(debug,"Before: %s\n        %s\n        '%s'\n",sortwin[0]->text+records[0]->textoff,sortwin[1]->text+records[1]->textoff,newname);
 
@@ -1066,7 +1112,7 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                               }
                             }
                             for (loop4=0;loop4<numofwords[loop3];loop4++) {
-                              if (wordptrs[loop3][loop4]>oldstart[loop3]) {wordptrs[loop3][loop4]+=extend;}
+                              if (wordptrs[loop3][loop4][0]>oldstart[loop3]) {wordptrs[loop3][loop4][0]+=extend;}
                             }
                           }
                           else
@@ -1085,8 +1131,8 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
                     }
   
                     //Set all used words so they are not looked at later
-                    for (loop3=loop;loop3<=wordnum1;loop3++) {wordptrs[0][loop3]=-1;}
-                    for (loop3=loop2;loop3<=wordnum2;loop3++) {wordptrs[1][loop3]=-1;}
+                    for (loop3=loop;loop3<=wordnum1;loop3++) {wordptrs[0][loop3][0]=-1;}
+                    for (loop3=loop2;loop3<=wordnum2;loop3++) {wordptrs[1][loop3][0]=-1;}
   
                     //Stop looking for matches
                     loop2=numofwords[1];
@@ -1120,13 +1166,31 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
     oldcount=numofwords[loop];
     numofwords[loop]=0;
     for (loop2=0;loop2<oldcount;loop2++) {
-      if (wordptrs[loop][loop2]>=0) {
+      if (wordptrs[loop][loop2][0]>=0) {
         //Word has not been removed by initial checking
-        index=findwordinlist(sortwin[loop]->text+records[loop]->textoff+wordptrs[loop][loop2],1,0);
+        index=findwordinlist(sortwin[loop]->text+records[loop]->textoff+wordptrs[loop][loop2][0],1,0);
         //Only keep word in the list if it is not to be ignored
-        if (index==-1) {wordptrs[loop][numofwords[loop]++]=wordptrs[loop][loop2];}
+        if (index==-1) {
+          //Word is not to be ignored, so keep the pointer
+          wordptrs[loop][numofwords[loop]][0]=wordptrs[loop][loop2][0];
+
+          //Also check if the word is in the thesaurus table
+          thesauruspos=findwordinlist(sortwin[loop]->text+records[loop]->textoff+wordptrs[loop][loop2][0],3,1);
+          if (thesauruspos>=0) {
+            //Word is in the thesaurus so find the first word in list that it is equivalent to
+            wordptrs[loop][numofwords[loop]][1]=thesauruslist[thesauruspos];
+          }
+          else
+          {
+            //Word is not in list
+            wordptrs[loop][numofwords[loop]][1]=-1;
+          }
+          numofwords[loop]++;
+        }
       }
     }
+    sortlisttext=sortwin[loop]->text+records[loop]->textoff;
+    qsort((void *)wordptrs[loop],(size_t)numofwords[loop],2*sizeof(int),comparewords2);
   }
   
   return 1;
@@ -1135,18 +1199,19 @@ int makelistofwords(REC_DATA *record1,REC_DATA *record2)
 //Tests to see any words are common between string1 and string2
 int checkforcommonword(REC_DATA *r1,REC_DATA *r2)
 {
-  int pos1,pos2;
+  int pos1=0,pos2=0,result;
 
   //Make list of all of the words in the two strings
   makelistofwords(r1,r2);
 
   //Find first word common to both lists
-  for (pos1=0;pos1<numofwords[0];pos1++) {
-    for (pos2=0;pos2<numofwords[1];pos2++) {
-      if (comparewordswiththesaurus(sortwin[0]->text+r1->textoff+wordptrs[0][pos1],sortwin[1]->text+r2->textoff+wordptrs[1][pos2])==0) {
-        //have found the word, so stop
-        return 1;
-      }
+  for (;pos1<numofwords[0];pos1++) {
+    //Find the first in second list>=word in first list
+    result=2;
+    while (pos2<numofwords[1] && result>0) {
+      result=comparewordswiththesaurus(sortwin[0]->text+r1->textoff+wordptrs[0][pos1][0],wordptrs[0][pos1][1],sortwin[1]->text+r2->textoff+wordptrs[1][pos2][0],wordptrs[1][pos2][1]);
+      if (result==0) {return 1;}
+      if (result>=0) {pos2++;}
     }
   }
   return 0;
@@ -1235,22 +1300,19 @@ int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum,int tempfi
 //Test to see if string 1 is inside string 2 or vice versa
 int comparestrings(REC_DATA *r1,REC_DATA *r2)
 {
-  int found=0,pos1,pos2;
+  int found=0,pos1=0,pos2=0,result;
 
   //Make list of all of the words in the two strings
   makelistofwords(r1,r2);
 
-  //Count of number of words in one string and not other
-  for (pos1=0;pos1<numofwords[0];pos1++) {
-    for (pos2=0;pos2<numofwords[1];pos2++) {
-      if (wordptrs[1][pos2]>=0) {
-        tempcount3++;
-        if (comparewordswiththesaurus(sortwin[0]->text+r1->textoff+wordptrs[0][pos1],sortwin[1]->text+r2->textoff+wordptrs[1][pos2])==0) {
-          found++;
-          wordptrs[1][pos2]=-1;
-          pos2=numofwords[1];
-        }
-      }
+  //Count number of words in both strings
+  for (;pos1<numofwords[0];pos1++) {
+    //Find the first in second list>=word in first list
+    result=2;
+    while (pos2<numofwords[1] && result>0) {
+      result=comparewordswiththesaurus(sortwin[0]->text+r1->textoff+wordptrs[0][pos1][0],wordptrs[0][pos1][1],sortwin[1]->text+r2->textoff+wordptrs[1][pos2][0],wordptrs[1][pos2][1]);
+      if (result==0) {found++;}
+      if (result>=0) {pos2++;}
     }
   }
 
@@ -2328,6 +2390,9 @@ int deleterecord(int del,int keep)
     if (sortwin[0]->recorddata[keep].type==1 && sortwin[0]->recorddata[keep].year==unknown_year) {sortwin[0]->recorddata[keep].type=2;}
     if (sortwin[0]->recorddata[keep].type==2 && sortwin[0]->recorddata[keep].year!=unknown_year) {sortwin[0]->recorddata[keep].type=1;}
   }
+
+//  memmove(&sortwin[0]->recorddata[del],&sortwin[0]->recorddata[del+1],(sortwin[0]->records-1-del)*sizeof(REC_DATA));
+
   for(loop=del;loop<sortwin[0]->records-1;loop++) {
     sortwin[0]->recorddata[loop]=sortwin[0]->recorddata[loop+1];
   }
@@ -3341,8 +3406,7 @@ int loadlist(int num,char *type)
 
 int loadlists(void)
 {
-  int loop,loop2,pos,offset,messagenum=1;
-  char *temptable;
+  int loop,offset,messagenum=1,equalpos,nextpos;
   char string[8],string2[64];
   _kernel_oserror *error;
 
@@ -3362,67 +3426,41 @@ int loadlists(void)
   loadlist(3,"th");
 
   //Now create the table saying which words are equivalent
-  flex_alloc((flex_ptr)&thesaurustable,wordlistlen[3]*wordlistlen[3]*sizeof(char));
-  flex_alloc((flex_ptr)&temptable,wordlistlen[3]*sizeof(char));
-  for (loop=0;loop<wordlistlen[3]*wordlistlen[3];loop++) {thesaurustable[loop]=0;}
+  flex_alloc((flex_ptr)&thesauruslist,wordlistlen[3]*sizeof(int));
+  for (loop=0;loop<wordlistlen[3];loop++) {thesauruslist[loop]=-1;}
 
   do {
+    equalpos=wordlistlen[3];
     sprintf(string,"th%d",messagenum++);
     error=_swix(MessageTrans_Lookup,_IN(0)|_IN(1)|_IN(2)|_IN(3),&messages,string,string2,64);
     if (error==NULL) {
-      //Set table of words in this line to zero
-      for (loop=0;loop<wordlistlen[3];loop++) {temptable[loop]=0;}
       offset=0;
       do {
-        temptable[findwordinlist(string2+offset,3,0)]=1;
+        //Find positions of word in list
+        nextpos=findwordinlist(string2+offset,3,0);
+
+        //If the equal word is unset or this word is lower than equal word
+        //set the equalpos to this word
+        if (nextpos<equalpos) {
+          //New word is lower in the list so need to set all words that
+          //are equal to equalpos equal to nextpos
+          for (loop=equalpos;loop<wordlistlen[3];loop++) {
+            if (thesauruslist[loop]==equalpos) {thesauruslist[loop]=nextpos;}
+          }
+          equalpos=nextpos;
+        }
+        
+        //Set the word that this word is equal to (lowest in list)
+        thesauruslist[nextpos]=equalpos;
+
         for (;string2[offset]!='_' && string2[offset]>=32;offset++) {}
         offset++;
       } while (string2[offset-1]=='_');
-
-      //Set main table
-      for (loop=0;loop<wordlistlen[3];loop++) {
-        if (temptable[loop]!=0) {
-          for (loop2=loop;loop2<wordlistlen[3];loop2++) {
-            if (temptable[loop2]!=0) {
-              thesaurustable[loop*wordlistlen[3]+loop2]=1;
-              thesaurustable[loop2*wordlistlen[3]+loop]=1;
-            }
-          }
-        }
-      }
     }
   } while (error==NULL);
 
-
-  flex_free((flex_ptr)&temptable);
-
-  for (loop=0;loop<20;loop++) {
-    fprintf(debug,"%23s","");
-    for (loop2=0;loop2<wordlistlen[3];loop2++) {
-      pos=strlen(wordlist[3][loop2].str)-20+loop;
-      if (pos>=0) {
-        fprintf(debug," %c ",wordlist[3][loop2].str[pos]);
-      }
-      else
-      {
-        fprintf(debug,"   ");
-      }
-    }
-    fprintf(debug,"\n");
-  }
-
-  fprintf(debug,"%21s-","");
   for (loop=0;loop<wordlistlen[3];loop++) {
-    fprintf(debug,"---");
-  }
-  fprintf(debug,"\n");
-
-  for (loop=0;loop<wordlistlen[3];loop++) {
-    fprintf(debug,"%20s : ",wordlist[3][loop].str);
-    for (loop2=0;loop2<wordlistlen[3];loop2++) {
-      fprintf(debug," %1d ",thesaurustable[loop*wordlistlen[3]+loop2]);
-    }
-    fprintf(debug,"\n");
+    fprintf(debug,"%20s : %s\n",wordlist[3][loop].str,wordlist[3][thesauruslist[loop]].str);
   }
   return 1;
 }
