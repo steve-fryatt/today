@@ -1,0 +1,3 @@
+Dir <Obey$Dir>
+CompileDate
+amu install INSTTYPE=app INSTDIR=<Obey$Dir> USERIF=Iyonix

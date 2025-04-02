@@ -4053,7 +4053,7 @@ int main(int argc,char *argv[])
     toolbox_initialise (0, WIMP_VERSION, wimp_messages, toolbox_events, "<Today$Dir>", &messages[0],
                         &id_block, &version, 0, (void **)&sprite_area);
 
-    msgs_external_init ((messagetrans_control_block *) messages);
+    msgs_initialise_external((messagetrans_control_block *) messages);
 
     //initialise the event library.
     event_initialise (&id_block);
