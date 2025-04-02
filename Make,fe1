@@ -20,6 +20,10 @@ OBJS = o.main
 	$(CC) $(CCFlags) $(Include) $(Links) -o !Today/!RunImage $(OBJS)
 
 # Individual source files
+#
+# NB: init.o is recompiled if compiledate.h changes, which means that it will be re-compiled
+# each time the makefile is run.  This is to ensure that the info window date constant is
+# updated correctly.
 
 o.main: h.main c.main
 	$(CC) $(CCFlags) $(Include) -o o.main -c c.main

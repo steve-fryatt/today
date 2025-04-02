@@ -25,6 +25,7 @@
 #include "iconbar.h"
 #include "menu.h"
 #include "printdbox.h"
+#include "proginfo.h"
 #include "quit.h"
 #include "saveas.h"
 #include "scale.h"
@@ -144,14 +145,14 @@ const char lookup3[256]={
            'P','Q','R','S','T','U','V','W','X','Y','Z','[','\\',']','^','_',
            '`','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o',
            'p','q','r','s','t','u','v','w','x','y','z','{','|','}','~',127,
-           'ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½',
-           'ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½',
-           'ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½',
-           'ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½','ï¿½',
-           'A','A','A','A','A','A','ï¿½','C','E','E','E','E','I','I','I','I',
-           'D','N','O','O','O','O','O','ï¿½','0','U','U','U','U','Y','P','S',
-           'a','a','a','a','a','a','ï¿½','c','e','e','e','e','i','i','i','i',
-           'd','n','o','o','o','o','o','ï¿½','0','u','u','u','u','y','p','y'};
+           '€','','‚','ƒ','„','…','†','‡','ˆ','‰','Š','‹','Œ','','Ž','',
+           '','‘','’','“','”','•','–','—','˜','™','š','›','œ','','ž','Ÿ',
+           ' ','¡','¢','£','¤','¥','¦','§','¨','©','ª','«','¬','­','®','¯',
+           '°','±','²','³','´','µ','¶','·','¸','¹','º','»','¼','½','¾','¿',
+           'A','A','A','A','A','A','Æ','C','E','E','E','E','I','I','I','I',
+           'D','N','O','O','O','O','O','×','0','U','U','U','U','Y','P','S',
+           'a','a','a','a','a','a','æ','c','e','e','e','e','i','i','i','i',
+           'd','n','o','o','o','o','o','÷','0','u','u','u','u','y','p','y'};
 
 /* ==================================================================================================================
  *
@@ -302,25 +303,25 @@ int parsestring(char *string)
       case '"':
       case '\'':
       case '`':
-      case 'ï¿½':
-      case 'ï¿½':
-      case 'ï¿½':
-      case 'ï¿½':
-      case 'ï¿½':
+      case '´':
+      case '':
+      case '‘':
+      case '”':
+      case '•':
         //Handle quotes
         if (lastchar==32) {
-          nextchar='ï¿½';
+          nextchar='”';
           counter++;
         }
         else
         {
           if (counter>0 && lookup[string[offset1+1]]<=32) {
-            nextchar='ï¿½';
+            nextchar='•';
             counter--;
           }
           else
           {
-            nextchar='ï¿½';
+            nextchar='‘';
           }
         }
         lastchar=string[offset2++]=nextchar;
@@ -3548,16 +3549,35 @@ int savefile_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
   return 1;
 }
 
-//Finds id_block for icon bar icon
-int createibar_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+/* Handles objects being auto-created.  Used for setting up items which need to be done /after/ the Res file has been
+ * loaded and processed.
+ */
+
+int object_created_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
-  if (strcmp(event->data.bytes,"Iconbar")==0) {
-    //Creating iconbar
-    iconbar_id=id_block->self_id;
-    iconbar_component=id_block->self_component;
+  char buffer[256];
+
+  if (strcmp (event->data.bytes, "Iconbar") == 0)
+  {
+    /* Creating the iconbar icon.  Record the component details. */
+
+    iconbar_id = id_block->self_id;
+    iconbar_component = id_block->self_component;
   }
-  return 1;
+  else if (strcmp (event->data.bytes, "ProgInfo") == 0)
+  {
+    /* Creating the Program Info window.  Update the version string.  */
+
+    msgs_param_lookup ("Version", buffer, sizeof (buffer), INFO_BOX_DATE, NULL, NULL, NULL);
+    proginfo_set_version (0, id_block->self_id, buffer);
+  }
+
+  return (1);
 }
+
+/* ------------------------------------------------------------------------------------------------------------------ */
 
 //Handles button clicks in search window
 int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *handle)
