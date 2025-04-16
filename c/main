@@ -3570,7 +3570,7 @@ int object_created_event(int event_code, ToolboxEvent *event, IdBlock *id_block,
   {
     /* Creating the Program Info window.  Update the version string.  */
 
-    msgs_param_lookup ("Version", buffer, sizeof (buffer), INFO_BOX_DATE, NULL, NULL, NULL);
+    msgs_param_lookup ("Version", buffer, sizeof (buffer), INFO_BOX_VERSION, INFO_BOX_DATE, NULL, NULL);
     proginfo_set_version (0, id_block->self_id, buffer);
   }
 
