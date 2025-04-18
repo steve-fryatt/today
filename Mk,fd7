@@ -1,4 +1,27 @@
+| Build Today using the DDE and other tools.
+|
+| It will be necessary to have BuildInfo and XMLMan present on Run$Path
+| for this script to work. See https://github.com/steve-fryatt/build-info
+| and https://github.com/steve-fryatt/xmlman for their source code, or
+| https://www.stevefryatt.org.uk/risc-os/programming-tools for pre-built
+| RISC OS binaries.
+
 Dir <Obey$Dir>
-BuildInfo -cheader h.buildinfo
+
+| Obtain the date and version information.
+
+BuildInfo -cheader h.buildinfo -versionvar Today$BuildVersion -datevar Today$BuildDate
+
+| Compile the application.
+
 WimpSlot -min 1024k
 amu all THROWBACK=-throwback
+
+| Build the manual.
+
+Do XMLMan Manual.Source/xml -text !Today.!Help  -define "date=<Today$BuildDate>" -define "version=<Today$BuildVersion>"
+
+| Tidy up.
+
+Unset Today$BuildVersion
+Unset Today$BuildDate

@@ -1,0 +1,489 @@
+<manual>
+<title>Today</title>
+<strapline>Display Historical Information</strapline>
+<credit>&copy; James&nbsp;Miskin,&nbsp;1991-2006; Stephen&nbsp;Fryatt,&nbsp;2005-2025</credit>
+<version>Version&nbsp;<define name="version" /></version>
+<date><define name="date" /></date>
+
+<index>
+<title>Contents</title>
+
+<chapterlist/>
+</index>
+
+<!-- Licence -->
+
+<chapter id="licence">
+<title>Licence</title>
+
+<section>
+<p><cite>Today</cite> is licensed under the EUPL, Version&nbsp;1.2 only (the &ldquo;Licence&rdquo;); you may not use this work except in compliance with the Licence.</p>
+
+<p>You may obtain a copy of the Licence at <link external="true" href="http://joinup.ec.europa.eu/software/page/eupl"/>.</p>
+
+<p>Unless required by applicable law or agreed to in writing, software distributed under the Licence is distributed on an &ldquo;<strong>as is</strong>&rdquo; basis, <strong>without warranties or conditions of any kind</strong>, either express or implied.</p>
+
+<p>See the Licence for the specific language governing permissions and limitations under the Licence.</p>
+
+<p>The source for <cite>Today</cite> can be found on GitHub, at <link external="true" href="https://github.com/steve-fryatt/today"/>.</p>
+</section>
+</chapter>
+
+<!-- Introduction -->
+
+<chapter>
+<title>Introduction</title>
+
+<section>
+<p>This is an extension of the original program for the PC, that was ported onto the Arc by James Noad. Although the original Arc version was very good it did have some draw-backs.</p>
+
+<ul>
+<li><p>It was not possible to select another date other than today. Although the program was designed for the current day, the original PC version did allow you to change the day.</p></li>
+
+<li><p>To add new events you had to use edit and put in all the codes for date, year, type and day yourself. Although this would be possible I thought that it would be better if the program could do it.</p></li>
+
+<li><p>The Arc version (although run from the desktop) was not fully multitasking and I wanted a multitasking version to make it even easier to use with other programs (e.g. copy the data onto a word-processor).</p></li>
+</ul>
+
+<p>This new program has all of these features. The program has been completely revised since earlier versions, it is now quicker and conforms better to the current Acorn style (by using the Toolbox). In order to run it you must install the Toolbox modules onto your harddisc.</p>
+
+<p><cite>Today</cite> is designed to work with RISC&nbsp;OS&nbsp;3.10 or later. It is 26/32-bit neutral, and should therefore run on all hardware systems as long as the 32-bit Shared C Library is installed. If required, this can be found on the Castle website at <link external="true" href="http://www.iyonix.com/32bit/system.shtml"/>.</p>
+
+<callout type="important">
+<p>If you are upgrading to this version from an older version and you wish to include data from your old copy, you <strong>must</strong> join the data by running this version of the program and using the Join option. This is because of some of the event type codes have changed (most significantly Event is now E).</p>
+</callout>
+</section>
+</chapter>
+
+
+<chapter>
+<title>Using Today</title>
+
+<section>
+<p>When <cite>Today</cite> is run by double-clicking its icon in the filer window you get an icon bar icon. The menu is obtained by clicking menu on this icon (or clicking the menu button in any of the windows) and has the following items:</p>
+
+<dl>
+<li>
+<title><menu>Info</menu></title>
+
+<p>Gives information on Today.</p></li>
+
+<li>
+<title><menu>Save</menu></title>
+
+<p>Allows you to save the contents of the scan window and the search window as text files.</p></li>
+
+<li>
+<title><menu>Open window</menu></title>
+
+<p>Allows you to open the windows used for Today, these windows will be discussed in the relevant sections.</p></li>
+
+<li>
+<title><menu>Highlight own data</menu></title>
+
+<p>If selected, all events stored in the 'Own' data files will be highlighted by drawing in red.</p></li>
+
+<li>
+<title><menu>Save Options</menu></title>
+
+<p>Saves the current state of the Highlight own data menu item and the destination file for new events in the add window.</p></li>
+
+<li>
+<title><menu>Quit</menu></title>
+
+<p>Select to Quit the program.</p></li>
+</dl>
+
+<p>You can also open the scan window by selecting the icon bar icon and the search window can be opened by using adjust on the icon bar icon.</p>
+
+<p>I would advise that before you start adding or editing the events data, you make a backup of the !Today program. Although it is unlikely the program could (possibly) corrupt the data if there is an unforseen bug.</p>
+</section>
+</chapter>
+
+
+<chapter>
+<title>Scan Window</title>
+
+<section>
+<p>The scan window allows you to find all events occuring on a specified date. The window has a number of icons across the top. These allow you to specify the day of the month and the month to scan. Once this is set you select the Scan button to perform the scan. This will then list all of the events in chronological order.</p>
+
+<p>If instead you select the Scan Today button, the date icons will be reset to the current date and the scan will be performed.</p>
+
+<p>The buttons to the right of the window allow you to</p>
+
+<ul compact="true">
+<li><p>open the search window</p></li>
+<li><p>open the add window</p></li>
+<li><p>open the join window</p></li>
+<li><p>load the own file and the month file for the window into a text editor</p></li>
+</ul>
+
+<p>If you double click with select on a word in one of the events, the search window will be opened and a search will be performed on that word. The other options (case sensitive, range, etc) will not be changed so you can make more specific searches for a range of words.</p>
+
+<p>If you double click with adjust, the edit window will be opened for that event (see the section on editing).</p>
+</section>
+</chapter>
+
+
+<chapter>
+<title>Search Window</title>
+
+<section>
+<p>To perform a search you must first setup the search string. This can be anything that could be in the text. The program will then scan through all the files for any event with  your search string in it. You can embed magic characters in the search string and these fall into the following categories</p>
+
+<ol>
+<li><p>Single characters</p>
+
+<ul compact="true">
+<li><p>'\.' &ndash; Match any character</p></li>
+<li><p>'\\' &ndash; Match a '\' character</p></li>
+<li><p>'\[' &ndash; Match a '[' character</p></li>
+<li><p>'\]' &ndash; Match a ']' character</p></li>
+<li><p>'\-' &ndash; Match a '-' character</p></li>
+</ul>
+</li>
+
+<li><p>General single characters</p>
+
+<ul compact="true">
+<li><p>'\a','\A' &ndash; Match any alphanumeric character</p></li>
+<li><p>'\c','\C' &ndash; Match any alphabetic character</p></li>
+<li><p>'\d','\D' &ndash; Match any digit</p></li>
+<li><p>'\p','\P' &ndash; Match any punctuation character</p></li>
+</ul>
+</li>
+
+<li><p>Multicharacters</p>
+
+<ul compact="true">
+<li><p>'\*' &ndash; Match 0 or more characters (of any type)</p></li>
+</ul>
+</li>
+
+<li><p>Specified multicharacters</p>
+
+<ul compact="true">
+<li><p>'\~C' &ndash; Match any character other than C </p></li>
+<li><p>'\&amp;C' &ndash; Match 0 or more of character C</p></li>
+<li><p>'\^C' &ndash; Match 1 or more of character C</p></li>
+</ul>
+
+<p>NOTE: For this category C can be one of</p>
+
+<ol compact="true">
+<li><p>A single character (e.g. '\~A' matches anything except the character 'A')</p></li>
+<li><p>Any magic character from categories 1 or 2 (e.g. '\&amp;\D' matches 0 or more digits)</p></li>
+<li><p>A set as defined below</p></li>
+</ol>
+</li>
+
+<li><p>A set which is delimited by '[' and ']' (note these are the only occurences of '[' and ']' allowed) and may contain any of the following (with no separating characters)</p>
+
+<ol compact="true">
+<li><p>Any characters or magic characters from 1) or 2) above</p></li>
+<li><p>Ranges between two characters C and D (inclusive) defined by C'-'D where C and D are either characters or magic characters from 1) (eg '[\da-f\p]' would match digits, a, b, c, d, e, f and punctuation)</p></li>
+</ol>
+</li>
+</ol>
+
+<p>You can select whether the search is case sensitive (Whether an 'a' is the same as an 'A') and you run it by clicking on the yellow icon. All references will then appear in the scan window.</p>
+
+<p>The event types popup menu allows you to select which types of events are to be included in the search. Any type that is unselected will be ignored.</p>
+
+<p>The range facility will allow you to ignore events that are outside a range that is specified. To make this facility work you have to select the 'Use Range' icon.</p>
+
+<p>There is a maximum of 500, going above this limit will cause the search to be aborted. But if you are being specific enough these will not occur.</p>
+
+<p>The three buttons to the right of the window allow you to open the scan, add and join windows.</p>
+
+<p>Double clicking with select on an event will scan for all events on the same month and day and open the scan window. If you double click with adjust, the edit window will be opened for that event (see the section on editing).</p>
+</section>
+</chapter>
+
+
+<chapter>
+<title>Adding</title>
+
+<section>
+<p>This allows you to add events to the files easily. Opening the window (if it is not already open) will copy the month and day from the scan window, making it easy to add new events to a day. The date is set using the writeable icon for the day and the year and the popup menu for the month. If the year is negative (in the range -1 to -999) then it is taken as being BC. The day popup menu is used to select the special day. Having a special day allows you to have dates which will only show on a certain day. For instance if you were to have 7 dates with the same event but with a special day of Sunday, the event would only come up if the date selected was a sunday. This allows you to put dates in that are on the first sunday of a month, or on specific days like Fathers day.</p>
+
+<p>The type is set using the popup menu and the 'Own File' and 'Month File' icons allow you to set which file it will be added to.</p>
+
+<p>The text is typed into the writeable icons at the bottom of the window. The text can be cleared by using the Clear Text button. The event is saved to the file by using the Add Event button. If the event is not on a special day, the text is cleared. It is preserved for special days so that it can be saved with a different date (makes it easy to create events on (say) the first Monday of a month).</p>
+
+<p>The scan and search windows will be updated to include the new event if it matches the settings used for the previous scan or search.</p>
+</section>
+</chapter>
+
+
+<chapter>
+<title>Editing</title>
+
+<section>
+<p>The edit window can be opened by double clicking on an event with the adjust button. The window looks the same as the Add window except the Add button has been replaced by a Delete button and an Edit button. Choosing delete will delete the old event from the data. Edit will delete the old event and save the new event (as with the add). This allows you to change details of an event (typically spelling mistakes and changing the event type) or move the event from the own file to the relevant month file.</p>
+
+<p>As with the add, the scan and search windows are updated after an edit to reflect the new data. If an event is deleted it is removed from the windows and if an event is added, the new data is compared against the previous scan/search to see if it is a match.</p>
+</section>
+</chapter>
+
+
+<chapter>
+<title>Join/Sort Data</title>
+
+<section>
+<p>The window allows you to combine data from another copy of !Today. This is done by dragging another copy of !Today to the window and then selecting the Join Data button.</p>
+
+<p>The routine then goes through each data file loading the events from each copy. The data is then search through for any duplicates. The duplicate check is done by comparing the words in the two text strings (all punctuation is ignored). The first check is to see whether or not one string contains initials and the other names. The rules used for this are that initials are always upper case and names are always uppercase first letter followed by lower case letters. If a sequence of initials is found to match in both strings, e.g. U S A  and USA they will be treated as matches. Alternatively if initials are found to match names in the other string, the initials will be replaced by the names and will be treated as matches (in this case though both strings must have a matching surname). This means that all of the strings below will match</p>
+
+<ul compact="true">
+<li><p>J W Miskin</p></li>
+<li><p>JWMiskin</p></li>
+<li><p>James W Miskin</p></li>
+<li><p>J William Miskin</p></li>
+<li><p>James William Miskin</p></li>
+</ul>
+
+<p>Once names and initials have been matches, words are checked against a list of ignorable words which have little information content (eg and, is, was, ...). Then the two strings will be compared to see whether all of the remaining words from one or other string are in the other string (in any order), when this compare is done a thesaurus is used to match words with the same meaning. Then the string with 'leftover' words will be kept and the other will be deleted.</p>
+
+<p>For instance the two strings 'James Miskin writes !Today' and 'James Miskin writes the excellent !Today program' would be counted as the same and the first one would be deleted. There are also checks to see the date is correct, but if an event with an unknown year is matched to another event with a known year they are taken to be the same and in the known year. Additionally if an event with type Unknown, Event or Reminder matches to more specific event type (eg Birthday) they are taken to have the more specific type.</p>
+
+<p>The events are then sorted into order (as chosen by the user in the Join/Sort window) before being saved again. There are two possible orders to choose from, eventtype and then date or duplicate type and date. The first one looks better for final data files. The second type is useful for finding duplicates. It saves the events in 3 groups, the first has all events with unknown dates, the second has all events occuring on exactly the same date as another event (and so could be duplicates of the same data) and the third has all the other events.</p>
+
+<p>You can also select the Sort Data icon to check for any duplicates and to sort the data without loading from another copy of !Today.</p>
+
+<p>Also when joining data from another copy of !Today, it is checked to see if any new event types have been defined and these are also copied. The way this is done is that the new types are checked against the old types, if the new name is the same as an old name but the letters are different, both letters are marked as unknown. If the new name has the same letter but a different name to another type, the letters are marked as unknown. Then the letters are filled in by first looking for the first letter of the name that is not already used as an event letter. If this does not assign letters to all of the types, they are given the first free available letter. This should all be transparent to the user, but will preserve all of the type data.</p>
+
+<p>The various word lists (ignore words, replace words, verb endings and the thesaurus) will also be copied across (removing duplicates at the same time).</p>
+</section>
+</chapter>
+
+
+<chapter>
+<title>Parsing</title>
+
+<section>
+<p>When any records are loaded (for scanning, searching and for the join/sort) the following parsing rules are used.</p>
+
+<ul>
+<li><p>Hard spaces are replaced by normal spaces.</p></li>
+<li><p>All initials for the form A.B.C. are replaced by ABC.</p></li>
+<li><p>Quote marks are replaced to use a standard form of only using &ldquo;, &rdquo; and &lsquo;.</p></li>
+<li><p>The following words are replaced</p>
+
+<ul compact="true">
+<li><p>'USA','UNITED STATES OF AMERICA','UNITED STATES' -&gt; 'US'</p></li>
+<li><p>'&amp;' -&gt; 'and'</p></li>
+<li><p>'FIRST' -&gt; '1st'</p></li>
+<li><p>'TELEVISION' -&gt; 'TV'</p></li>
+<li><p>'DRAMATIST' -&gt; 'playwright'</p></li>
+</ul></li>
+</ul>
+
+<p>This is done to maintain a consistent style between all authors of new data. It also has the advantage that it makes the join/sort routine much more efficient at finding duplicate events.</p>
+
+<p>Although this may look like overkill, it adds very little extra time to the processing and the search facility is still quicker than the earlier versions of the program.</p>
+</section>
+</chapter>
+
+
+<chapter>
+<title>Editing</title>
+
+<section>
+<p>You can edit the text files in a text editor providing that each line is followed by a newline character. The format for an item is as follows:-</p>
+
+<dl>
+<li><title>Column 1</title>
+
+<p>The event type which can be:</p>
+
+<ul compact="true">
+<li><p>S for special dates in history,</p></li>
+<li><p>R for a reminder,</p></li>
+<li><p>B for birthdays,</p></li>
+<li><p>D for a death,</p></li>
+<li><p>W for a war,</p></li>
+<li><p>I for a discovery.</p></li>
+</ul>
+</li>
+
+<li><title>Columns 2-5</title>
+
+<p>Month and day as MMDD with leading zeros.  Zeros for either month or day cause ALL months or days to match when being scanned.  For example 0001 would match the first of every month while 0400 would match every day of April.</p>
+</li>
+
+<li><title>Columns 6-9</title>
+
+<p>The full year of the event as four digits. May be left blank for an unknown year. May also be -ve for BC dates.</p>
+</li>
+
+<li><title>Column 10</title>
+
+<p>A special processing flag.  Values may be:</p>
+
+<ul>
+<li><p>SPACE for no special processing.</p></li>
+<li><p>C to continue a message from the previous line.  Note, that you MUST repeat the date fields.</p></li>
+<li><p>DAY-OF-WEEK DIGIT where 1=Sunday ... 7=Saturday. This will cause the message to display only if the date falls on a certain day of the week.  Look in the November file for US voting day examples.</p></li>
+</ul>
+</li>
+            
+<li><title>Rest</title>
+
+<p>Text followed by a newline character.</p>
+</li>
+</dl>
+
+<p>If you want to add items with a text editor you must make sure the format is correct because the program will not check for you (it takes too much time when it has a search to perform and there is a perfectly good date adding function built in).</p>
+</section>
+</chapter>
+
+
+<chapter>
+<title>Updates</title>
+
+<section>
+<title>2.00 (8 Jun 1991)</title>
+
+<p>The original multitasking basic version. Solved the problems of the original but was very slow.</p>
+</section>
+
+<section>
+<title>2.01 (16 Jun 1991)</title>
+
+<p>Wrote it in RISC code. Much faster but there was a bug so any continued day did not work. Added a section that will break lines if they go above 62 characters in length. This makes it much more readable.</p>
+</section>
+
+<section>
+<title>2.02 (18 Jun 1991)</title>
+
+<p>Removed the bug in the code (now the continue codes are used properly).</p>
+</section>
+
+<section>
+<title>2.04 (21 Jun 1991)</title>
+
+<p>Started adding the search option to make it easier to find events about specific items.</p>
+</section>
+
+<section>
+<title>2.05 (25-Jun-91)</title>
+
+<p>Sorted out a bug in the code so now the scam window shows data correctly. Also changed my mind about the display. Now any event without a specified year has a '????' icon instead of a year. Before it was confusing and looked like a continuation of the previous event.</p>
+</section>
+
+<section>
+<title>2.06 (31 Jun 1991)</title>
+
+<p>Added the type facility to the search to make it easier to specify events. Also added print to the search and the scan windows.</p>
+</section>
+
+<section>
+<title>2.07 (4 Jul 1991)</title>
+
+<p>Added the range facility to the search. It now will allow you to specify pretty accurately what you want so you minimize the events that you get.</p>
+</section>
+
+<section>
+<title>2.08 (9 Jul 1991)</title>
+
+<p>Tidied the code so it ran faster (and was shorter). This has allowed me to make the maximum number of events 80 and increase the data it can handle for a search to 9000 bytes.</p>
+</section>
+
+<section>
+<title>2.09 (25 May 1992)</title>
+
+<p>Gave it an iconbar icon and a menu with quit. Now you cannot quit by closing the windows. Tidied up the WIMP interface and made it more user friendly. Also cured a couple of bugs in the save routines (one that wouldn't allow saving to the month file and one that caused the event type to be saved wrongly). Increased the maximum events to 100 and made it force the first letter of a string to uppercase when it is displayed in the scan window or the search window.</p>
+</section>
+
+<section>
+<title>2.10 (19 Aug 1994)</title>
+
+<p>Thanks to Charlie Alford, a few bug fixes and improvements have been made. Buffer overflow errors no longer happen when !Today is run. Also the maximum ammount of text for one day has been increased to 8K and the maximum for a scan to more than 30K. Also the file handling has been tidied up and made a little less fussy about the way a file is saved.</p>
+</section>
+
+<section>
+<title>2.11 (13 Apr 1995)</title>
+
+<p>Another buffer overflow problem fixed when adding dates to October, Novenmber or December. New data files from Charlie Alford added.</p>
+</section>
+
+<section>
+<title>2.12 (6 Jul 1996)</title>
+<p>Fixed problem with case sensitive icon in search window. Fixed background colours of text on RiscPC. Fixed loaders to cope with blank lines in the data files. Added a new event type of death. Fixed bug in code for searching in a range. Added the Scan Today option.</p>
+</section>
+
+<section>
+<title>2.13 (24 Jul 1996)</title>
+
+<p>Put code to justify the text in the scan window and the Search window when outline fonts are used on a RiscPC. Widened icons for dates in scan and search windows because it looked too tight with fonts on a RiscPC. Shrunk the code lots by altering the way windows are created. Got scan/search windows to alter size to fit screen. Put code to allow saving of scan and search windows. Got caret to move into first icon when opening search window. Got menu to stay open when adjust used. Added highlights of events in own file. Made search code match a blank string to nothing and not everything.</p>
+</section>
+
+<section>
+<title>2.14 (6 Jan 1997)</title>
+
+<p>Added the JoinSort utility. Added AIF header to make StrongARM compliant (old format has been deprecated). Incorporated more data from users.</p>
+</section>
+
+<section>
+<title>3.00 (2 Apr 1997)</title>
+
+<p>Completely new version of the program. Now written in C and using the Toolbox so it should be easier to debug/add new features. Added a toolbar to the scan window and the search window. Improved the join/sort routines and added the string parsing code to the load routines. Added two new event types, War and Discovery.</p>
+</section>
+
+<section>
+<title>3.01 (8 Apr 1997)</title>
+
+<p>Made opening add window set the caret in first icon. Removed couple of modules from Run file which are not used. Made program report error if you tried to scan without specifying a day of the month. Made opening the add window take the date from the scan window if the add window is not already open. Added save options menu item to scan menu.</p>
+</section>
+
+<section>
+<title>3.02 (29 Apr 1997)</title>
+
+<p>Made the parsing routine remove trailing full stops (maintains a consistant style). Put in keyboard short cuts to open windows. Now adds any new events to the correct point in the data and not at the end of the relevant file. Made double clicking on word in scan window search for that word. Added the facility to edit and delete events. Fixed a bug in the justification of strings in the scan and search windows (it didn't wrap if the last word of the string didn't fit). Made the scan and search windows update after an add or edit performed. Made the Join routine look for new event types in the other copy of !Today. Added buttons to the scan and search windows to allow other windows to be opened easily.</p>
+</section>
+
+<section>
+<title>3.03 (11 Jun 1997)</title>
+
+<p>Added a button to the scan window to open the data files for the window into a text editor.</p>
+</section>
+
+<section>
+<title>3.04 (31 Aug 1997)</title>
+
+<p>When an add is done, the new event is checked against the search and scan windows. I have made sure this is done transparently (suppressing a message if there is not enough free memory for the record to be added to the search). I have made the join/sort routines make sure that all events are put into the correct month files (unless they are in the own file) instead of just sorting one month file at a time. Tidied up the event types copying when a join is done, now it makes sure that all event types are copied but that event letters are not duplicated.</p>
+</section>
+
+<section>
+<title>3.05 (24 Sep 1997)</title>
+
+<p>Added more words to be replaced when checking for duplicates. Made the word replacing get the case of the first letter correct by copying the case if the first letter to be replaced. Added option to choose how data is to be sorted when doing a Join/Sort. Made the duplicate checking code match initials and names. Added a thesaurus to be used when looking for duplicates. Speeded up the code to sort events into the correct month files.</p>
+</section>
+
+<section>
+<title>3.06 (11 Apr 1998)</title>
+
+<p>Added magic characters to the search string. Incorporated more data from users.</p>
+</section>
+
+<section>
+<title>3.10 (3 Feb 2006)</title>
+
+<p>Made 32-bit compatible and linked to a new version of flexlib. Documentation converted into ManTools format to allow for easy future updates.</p>
+</section>
+</chapter>
+
+<!-- Contact Details -->
+
+<section id="contact">
+<title>Updates and Contacting Me</title>
+
+<p><cite>Today</cite> was written by James Miskin, but the 32-bit update was carried out by Stephen Fryatt. If you have any comments about the application, or would like to report any bugs that you find, you can email me at the address below.</p>
+
+<p>Updates to <cite>Today</cite> and more software for RISC&nbsp;OS computers can be found on my website at <link href="http://www.stevefryatt.org.uk/risc-os"/>.</p>
+
+<p>Stephen Fryatt<br/>
+email: <link href="mailto:info@stevefryatt.org.uk" flatten="true">info@stevefryatt.org.uk</link></p>
+</section>
+</manual>
