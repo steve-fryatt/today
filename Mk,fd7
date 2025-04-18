@@ -1,4 +1,4 @@
 Dir <Obey$Dir>
-CompileInfo -header h.compiledate
+BuildInfo -cheader h.buildinfo
 WimpSlot -min 1024k
 amu all THROWBACK=-throwback

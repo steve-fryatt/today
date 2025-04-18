@@ -73,4 +73,4 @@ o.main:	SFlib:sflib.h.debug
 o.main:	SFlib:sflib.h.msgs
 o.main:	OSLib:oslib.h.messagetrans
 o.main:	h.main
-o.main:	h.compiledate
+o.main:	h.buildinfo
