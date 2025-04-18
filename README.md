@@ -17,7 +17,7 @@ Today needs to be built using the [Desktop Development Environment](https://www.
 
 It can be checked out from the GitHub repository using the Git client from RISC OS Open.
 
-You will need to have two utilities - BuildInfo and XMLMan - inslatted on your Run Path for the build to work. These can be obtained from <https://www.stevefryatt.org.uk/risc-os/programming-tools>, and the easiest way to ensure that they are found is to install them into Boot:Library.
+You will need to have two utilities - BuildInfo and XMLMan - installed on your Run Path for the build to work. These can be obtained from <https://www.stevefryatt.org.uk/risc-os/programming-tools>, and the easiest way to ensure that they are found is to install them into Boot:Library.
 
 With this setup complete and the DDE having been seen, running the Mk TaskObey file in the project folder should build the documentation and !RunImage file within the !Today application.
 
