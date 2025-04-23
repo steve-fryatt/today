@@ -4,6 +4,10 @@ od
 oz
 h/buildinfo
 Chars/chars,ff8
-\!Today/!RunImage,ff8
-\!Today/!Help
-\!Today/!Help,fff
+Build/!Today/!RunImage,ff8
+Build/!Today/!Help
+Build/!Today/!Help,fff
+Build/Licence
+Build/Licence,fff
+Build/ReadMe
+Build/ReadMe,fff

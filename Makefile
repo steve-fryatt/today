@@ -5,7 +5,7 @@ COMPONENT = Today
 # The name of the linked file defaults to COMPONENT, which is often the case
 # for single-file programs. But when the linked file lives in an application
 # directory, it is normally called !RunImage.
-TARGET = !Today.!RunImage
+TARGET = Build.!Today.!RunImage
 
 # The list of source/object files defaults to TARGET, which again is often
 # the case for single-file programs. But we don't want our source file to be
@@ -20,7 +20,11 @@ include CApp
 C_NO_FNAMES =
 
 clean::
-	${WIPE} ${INSTAPP} ${WFLAGS}
+	${WIPE} Build.!Today.!Help ${WFLAGS}
+	${WIPE} Build.ReadMe ${WFLAGS}
+	${WIPE} Build.Licence ${WFLAGS}
+#	${WIPE} ${TARGET} ${WFLAGS}
+#	${WIPE} ${INSTAPP} ${WFLAGS}
 
 # Dynamic dependencies:
 o.main:	c.main
