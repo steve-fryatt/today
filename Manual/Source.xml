@@ -481,8 +481,9 @@
 <section>
 <title>Test Build</title>
 
-<ul>
+<ul compact="true">
 <li><p>Add a <menu>Help...</menu> entry into the main and iconbar menus.</p></li>
+<li><p>Update the current scan window date when the system clock changes day, so long as the window was previously on the current day.</p></li>
 <li><p>Correctly set the upper bound for the day of the month when opening the event window.</p></li>
 </ul>
 </section>

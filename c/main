@@ -80,7 +80,7 @@ static  WimpPollBlock  poll_block;
 static  IdBlock        id_block;
 int *sprite_area,version;
 char monthnames[13][4];
-static int days_in_month[13]={0,31,29,31,30,31,30,31,31,30,31,30,31};
+int days_in_month[13]={0,31,29,31,30,31,30,31,31,30,31,30,31};
 static char monthfiles[13][4]={"own","jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"};
 MessagesFD messages[2]; /* = {NULL, NULL}; */
 WIN_DATA scanwin,srchwin,addwin,editwin;
@@ -3941,6 +3941,26 @@ int loadlists(int numoffiles)
   return 1;
 }
 
+//Handles idle events, called once every minute
+int idle_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *handle)
+{
+  int old_day, old_month, new_day, new_month, current_day, current_month;
+
+  if (dates_test_for_date_change(&old_day, &old_month, &new_day, &new_month) == FALSE)
+    return 1;
+
+  /* Unless the scan window was set to the old day, don't update it. */
+
+  dates_read_date(scanwin.toolbar, 3, 1, 0, &current_day, &current_month, NULL);
+  if (old_day != current_day || old_month != current_month)
+    return 1;
+
+  dates_write_date(scanwin.toolbar, 3, 1, 0, new_day, new_month, 0);
+  beginscan();
+
+  return 1;
+}
+
 int main(int argc,char *argv[])
 {
     //Setup the list of wimp messages to receive
@@ -3982,7 +4002,7 @@ int main(int argc,char *argv[])
       Toolbox_ObjectAutoCreated,
       0};
 
-    int  event_code,i;
+    int  event_code, i, next_poll_time, current_time;
     char string[8];
 
 
@@ -4002,11 +4022,12 @@ int main(int argc,char *argv[])
     msgs_initialise_external((messagetrans_control_block *) messages);
 
     //initialise the event library.
-    event_initialise (&id_block);
+    event_initialise(&id_block);
 
-    event_set_mask (1+256);
+    event_set_mask(256);
 
     //Register all of the events
+    event_register_wimp_handler(-1,0,idle_event,0);
     event_register_wimp_handler(-1,1,redraw_event,0);
     event_register_wimp_handler(-1,6,button_event,0);
 
@@ -4057,9 +4078,18 @@ int main(int argc,char *argv[])
 
     setupwindows();
 
+    _swix(OS_ReadMonotonicTime, _OUT(0), &next_poll_time);
+
+    dates_initialise();
+
     //poll loop
     while (TRUE)
     {
-        event_poll (&event_code, &poll_block, 0);
+        _swix(OS_ReadMonotonicTime, _OUT(0), &current_time);
+
+        while ((next_poll_time - current_time) <= 0)
+          next_poll_time += 6000;
+
+        event_poll_idle(&event_code, &poll_block, next_poll_time, 0);
     }
 }

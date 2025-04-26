@@ -124,6 +124,7 @@ extern int findwordinlist            (char *string,int num,int verbcheck,int ter
 extern int fixtoolbar                (WIN_DATA *win,char *toolname);
 extern int fontchange_message        (WimpMessage *message,void *handle);
 extern int highlight_event           (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
+extern int idle_event                (int event_code, WimpPollBlock *event, IdBlock *id_block,void *handle);
 extern int joincompare               (const void *e1,const void *e2);
 extern int joindata_event            (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
 extern int justifywindow             (WIN_DATA *window,int reopen);
@@ -136,6 +137,7 @@ extern int loadnextrecord            (FILE *fileptr,WIN_DATA *window,int filenum
 extern int main                      (int argc,char *argv[]);
 extern int makelistofwords           (REC_DATA *record1,REC_DATA *record2);
 extern int makeroomfordata           (WIN_DATA *window,int maximum);
+extern int menuhelp_event            (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
 extern int menuquit_event            (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
 extern int modechange_message        (WimpMessage *message,void *handle);
 extern int movetoendofword           (char *string,int offset);

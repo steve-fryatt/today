@@ -46,6 +46,32 @@
 #define DATES_UNKNOWN_YEAR (-1000000)
 
 /**
+ * Initialise the current date tracking.
+ */
+
+void dates_initialise(void);
+ 
+/**
+ * Check to see if the current date has changed since the last call.
+ *
+ * If the date has changed, the old and new days and months can be returned in
+ * via a collection of pointers to variables.
+ *
+ * \param *old_day	Pointer to a variable in which to return the old day, or
+ *			NULL if not required.
+ * \param *old_month	Pointer to a variable in which to return the old month,
+ *			or NULL if not required.
+ * \param *new_day	Pointer to a variable in which to return the new day, or
+ *			NULL if not required.
+ * \param *new_month	Pointer to a variable in which to return the new month,
+ *			or NULL if not required.
+ * \return		TRUE if the date has changed from the previous call;
+ *			otherwise FALSE.
+ */
+
+BOOL dates_test_for_date_change(int *old_day, int *old_month, int *new_day, int *new_month);
+ 
+/**
  * Read a date from a date selector in a window. This can include up to three
  * fields, for day, month and year.
  *
