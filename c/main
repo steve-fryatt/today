@@ -2149,6 +2149,13 @@ int menuquit_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
   return 1;
 }
 
+//This code is called when help is selected on the menu
+int menuhelp_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
+{
+  _swi(OS_CLI,_IN(0),"%Filer_Run <Today$Dir>.!Help");
+  return 1;
+}
+
 //Fix toolbar to window
 int fixtoolbar(WIN_DATA *win,char *toolname)
 {
@@ -4053,6 +4060,7 @@ int main(int argc,char *argv[])
       17,
       18,
       19,
+      20,
       StringSet_ValueChanged,
       SaveAs_AboutToBeShown,
       SaveAs_SaveToFile,
@@ -4106,6 +4114,7 @@ int main(int argc,char *argv[])
     event_register_toolbox_handler(-1,17,saveoptions_event,0);
     event_register_toolbox_handler(-1,18,delete_event,0);
     event_register_toolbox_handler(-1,19,edit_event,0);
+    event_register_toolbox_handler(-1,20,menuhelp_event,0);
     event_register_toolbox_handler(-1,SaveAs_AboutToBeShown,showingsaveas_event,0);
     event_register_toolbox_handler(-1,SaveAs_SaveToFile,savefile_event,0);
     event_register_toolbox_handler(-1,StringSet_ValueChanged,stringchanged_event,0);

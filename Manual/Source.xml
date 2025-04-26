@@ -69,6 +69,11 @@
 <p>Gives information on Today.</p></li>
 
 <li>
+<title><menu>Help...</menu></title>
+
+<p>Opens this documentation in a text editor.</p></li>
+
+<li>
 <title><menu>Save</menu></title>
 
 <p>Allows you to save the contents of the scan window and the search window as text files.</p></li>
@@ -471,6 +476,15 @@
 <title>3.10 (3 Feb 2006)</title>
 
 <p>Made 32-bit compatible and linked to a new version of flexlib. Documentation converted into ManTools format to allow for easy future updates.</p>
+</section>
+
+<section>
+<title>Test Build</title>
+
+<ul>
+<li><p>Add a <menu>Help...</menu> entry into the main and iconbar menus.</p></li>
+<li><p>Correctly set the upper bound for the day of the month when opening the event window.</p></li>
+</ul>
 </section>
 </chapter>
 
