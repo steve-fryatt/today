@@ -1,0 +1,14 @@
+Package: Today
+Version: 2.12-1
+Section: Miscellaneous
+Priority: Optional
+Maintainer: Stephen Fryatt <info@stevefryatt.org.uk>
+Standards-Version: 0.6.0
+Environment: arm
+Licence: Free
+Description: Today is an application to list events that have taken place (or
+ will take place) on a given date. It contains a database of information, to
+ which additional dates and personal anniversaries can be added.
+Homepage: http://www.stevefryatt.org.uk/risc-os/today
+Components: Apps.Miscellaneous.!Locate (Movable)
+Recommends: StrongHelp
