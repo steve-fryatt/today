@@ -44,6 +44,11 @@
 #define TEXT_STEP 512
 #define MAX_WORDS_IN_STRING 256
 
+/* Global variables which are shared with other code modules. */
+
+extern char monthnames[13][4];
+extern int days_in_month[13];
+
 /* ==================================================================================================================
  * Structure Definitions
  */
