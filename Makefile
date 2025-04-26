@@ -10,7 +10,7 @@ TARGET = Build.!Today.!RunImage
 # The list of source/object files defaults to TARGET, which again is often
 # the case for single-file programs. But we don't want our source file to be
 # called !RunImage.
-OBJS = main
+OBJS = main dates
 
 CINCLUDES = -IC: -ISFlib: -IOSLib:
 LIBS = C:o.toolboxlib C:o.wimplib C:o.eventlib C:o.renderlib C:o.flexlib SFLib:o.SFLib OSLib:o.OSLib32
@@ -27,6 +27,19 @@ clean::
 #	${WIPE} ${INSTAPP} ${WFLAGS}
 
 # Dynamic dependencies:
+o.dates:	c.dates
+o.dates:	C:h.gadgets
+o.dates:	C:h.kernel
+o.dates:	C:h.toolbox
+o.dates:	C:h.wimp
+o.dates:	OSLib:oslib.h.os
+o.dates:	OSLib:oslib.h.types
+o.dates:	OSLib:oslib.h.oscore32
+o.dates:	OSLib:oslib.h.osf32
+o.dates:	OSLib:oslib.h.osword
+o.dates:	OSLib:oslib.h.territory
+o.dates:	h.dates
+o.dates:	C:h.gadgets
 o.main:	c.main
 o.main:	C:h.kernel
 o.main:	C:h.swis
@@ -56,11 +69,10 @@ o.main:	OSLib:oslib.h.types
 o.main:	OSLib:oslib.h.os
 o.main:	OSLib:oslib.h.oscore32
 o.main:	OSLib:oslib.h.osf32
-o.main:	OSLib:oslib.h.os
-o.main:	OSLib:oslib.h.osword
-o.main:	OSLib:oslib.h.territory
 o.main:	SFlib:sflib.h.debug
 o.main:	SFlib:sflib.h.msgs
 o.main:	OSLib:oslib.h.messagetrans
 o.main:	h.main
+o.main:	h.dates
+o.main:	C:h.gadgets
 o.main:	h.buildinfo

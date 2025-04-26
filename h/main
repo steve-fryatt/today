@@ -44,8 +44,6 @@
 #define TEXT_STEP 512
 #define MAX_WORDS_IN_STRING 256
 
-#define UNKNOWN_YEAR (-1000000)
-
 /* ==================================================================================================================
  * Structure Definitions
  */
@@ -122,7 +120,6 @@ extern int edit_event                (int event_code, ToolboxEvent *event, IdBlo
 extern int editevent                 (WIN_DATA *win,int flags);
 extern int finddayofweek             (int day,int month);
 extern int findfontwidths            (void);
-extern int findnumber                (ObjectId win,ComponentId ic,int unknown);
 extern int findwordinlist            (char *string,int num,int verbcheck,int termchar1,int termchar2);
 extern int fixtoolbar                (WIN_DATA *win,char *toolname);
 extern int fontchange_message        (WimpMessage *message,void *handle);

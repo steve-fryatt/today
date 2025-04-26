@@ -1,0 +1,209 @@
+/* Today - dates.c
+ *
+ * Copyright 1991-2006, James Miskin
+ * Copyright 2025, Stephen Fryatt (info@stevefryatt.org.uk)
+ *
+ * This file is part of Today:
+ *
+ *   http://www.stevefryatt.org.uk/risc-os/today
+ *
+ * Licensed under the EUPL, Version 1.2 only (the "Licence");
+ * You may not use this work except in compliance with the
+ * Licence.
+ *
+ * You may obtain a copy of the Licence at:
+ *
+ *   http://joinup.ec.europa.eu/software/page/eupl
+ *
+ * Unless required by applicable law or agreed to in
+ * writing, software distributed under the Licence is
+ * distributed on an "AS IS" basis, WITHOUT WARRANTIES
+ * OR CONDITIONS OF ANY KIND, either express or implied.
+ *
+ * See the Licence for the specific language governing
+ * permissions and limitations under the Licence.
+ */
+ 
+ /**
+  * \file: dates.c
+  */
+
+/* ToolboxLib Headers */
+
+#include "gadgets.h"
+
+/* Include OSLib Headers. */
+
+#include "oslib/os.h"
+#include "oslib/osword.h"
+#include "oslib/territory.h"
+
+/* Application Headers */
+
+#include "dates.h"
+
+/* Global Variables. */
+
+extern char monthnames[13][4];
+extern int days_in_month[13];
+
+/* Function Prototypes */
+
+int dates_find_number(ObjectId win, ComponentId ic, int unknown);
+
+/**
+ * Read a date from a date selector in a window. This can include up to three
+ * fields, for day, month and year.
+ *
+ * \param window	The Toolbox object ID of the window containing the date
+ *			selector.
+ * \param day_gadget	The component ID of the number range containing the day,
+ *			or 0 if not required.
+ * \param month_gadget	The component ID of the stringset containing the month,
+ *			or 0 if not required.
+ * \param year_gadget	The component ID of the number range containing the
+ *			year, or 0 if not required.
+ * \param *day		Pointer to a valiable to return the day, or NULL if not
+ *			required.
+ * \param *month	Pointer to a valiable to return the month, or NULL if
+ *			not required.
+ * \param *year		Pointer to a valiable to return the year, or NULL if not
+ *			required.
+ */
+
+void dates_read_date(ObjectId window, ComponentId day_gadget, ComponentId month_gadget, ComponentId year_gadget, int *day, int *month, int *year)
+{
+	if (day != NULL)
+		*day = 0;
+
+	if (month != NULL)
+		*month = 0;
+
+	if (year != NULL)
+		*year = 0;
+
+	if (window == NULL)
+		return;
+
+	if (day_gadget != NULL && day != NULL) {
+		*day = dates_find_number(window, day_gadget, DATES_UNKNOWN_DAY);
+	}
+
+	if (month_gadget != NULL && month != NULL) {
+		stringset_get_selected(1, window, month_gadget, month);
+		(*month)++;
+	}
+
+	if (year_gadget != NULL && year != NULL) {
+		*year = dates_find_number(window, year_gadget, DATES_UNKNOWN_YEAR);
+	}
+}
+
+/**
+ * Update a date selector in a window with a new value. This can include up to
+ * three fields, for day, month and year.
+ *
+ * If both day_gadget and month_gadget are supplied, the bounds of the day
+ * gadget will be updated to reflect the new month.
+ *
+ * \param window	The Toolbox object ID of the window containing the date
+ *			selector.
+ * \param day_gadget	The component ID of the number range containing the day,
+ *			or 0 if not required.
+ * \param month_gadget	The component ID of the stringset containing the month,
+ *			or 0 if not required.
+ * \param year_gadget	The component ID of the number range containing the
+ *			year, or 0 if not required.
+ * \param day		The new day to set.
+ * \param month		The new month to set.
+ * \param year		The new year to set.
+ */
+
+void dates_write_date(ObjectId window, ComponentId day_gadget, ComponentId month_gadget, ComponentId year_gadget, int day, int month, int year)
+{
+	int writeable;
+
+	if (day_gadget != 0) {
+		if (day <= 0) {
+			numberrange_get_components(1, window, day_gadget, &writeable, 0, 0, 0);
+			writablefield_set_value(0, window, writeable, "");
+		} else {
+			numberrange_set_value(0, window, day_gadget, day);
+		}
+	}
+
+	if (month_gadget != 0) {
+		stringset_set_selected(0, window, month_gadget, monthnames[(month >= 0 && month <= 12) ? month : 1]);
+
+		if (day_gadget != 0)
+			numberrange_set_bounds(NumberRange_UpperBound, window, day_gadget, 0, days_in_month[month], 0, 0);
+	}
+
+	if (year_gadget != 0) {
+		if (year == DATES_UNKNOWN_YEAR) {
+			numberrange_get_components(1, window, year_gadget, &writeable, 0, 0, 0);
+			writablefield_set_value(0, window, writeable, "");
+		} else {
+			numberrange_set_value(0, window, year_gadget, year);
+		}
+		
+	}
+}
+
+/**
+ * Update a date selector in a window to the current date. This can include up
+ * to three fields, for day, month and year.
+ *
+ * \param window	The Toolbox object ID of the window containing the date
+ *			selector.
+ * \param day_gadget	The component ID of the number range containing the day,
+ *			or 0 if not required.
+ * \param month_gadget	The component ID of the stringset containing the month,
+ *			or 0 if not required.
+ * \param year_gadget	The component ID of the number range containing the
+ *			year, or 0 if not required.
+ */
+
+void dates_set_to_current(ObjectId window, ComponentId day_gadget, ComponentId month_gadget, ComponentId year_gadget)
+{
+	oswordreadclock_utc_block	time;
+	territory_ordinals		ordinals;
+
+
+	/* Read the current time from the system clock. */
+
+	time.op = oswordreadclock_OP_UTC;
+	oswordreadclock_utc(&time);
+	territory_convert_time_to_ordinals(territory_CURRENT, (const os_date_and_time *) &(time.utc), &ordinals);
+
+	/* Use the data to set up the window. */
+
+	dates_write_date(window, day_gadget, month_gadget, year_gadget, ordinals.date, ordinals.month, ordinals.year);
+}
+
+/**
+ * Return the number in a number range, returning the value passed as unknown if
+ * the field is blank.
+ *
+ * \param win		The Toolbox object ID of the window containing the
+ *			number range.
+ * \param component	The component ID of the target number range.
+ * \param unknown	The value to return if the number range is empty.
+ * \return		The number read from the range.
+ */
+
+int dates_find_number(ObjectId window, ComponentId component, int unknown)
+{
+	int writeable, len, val;
+	char numstring[20];
+
+	numberrange_get_components(1, window, component, &writeable, 0, 0, 0);
+	writablefield_get_value(0, window, writeable, numstring, 20, &len);
+
+	if (numstring[0] < 32)
+		val = unknown;
+	else
+		numberrange_get_value(0, window, component, &val);
+
+	return val;
+}

@@ -1,0 +1,106 @@
+/* Today - dates.h
+ *
+ * Copyright 1991-2006, James Miskin
+ * Copyright 2025, Stephen Fryatt (info@stevefryatt.org.uk)
+ *
+ * This file is part of Today:
+ *
+ *   http://www.stevefryatt.org.uk/risc-os/today
+ *
+ * Licensed under the EUPL, Version 1.2 only (the "Licence");
+ * You may not use this work except in compliance with the
+ * Licence.
+ *
+ * You may obtain a copy of the Licence at:
+ *
+ *   http://joinup.ec.europa.eu/software/page/eupl
+ *
+ * Unless required by applicable law or agreed to in
+ * writing, software distributed under the Licence is
+ * distributed on an "AS IS" basis, WITHOUT WARRANTIES
+ * OR CONDITIONS OF ANY KIND, either express or implied.
+ *
+ * See the Licence for the specific language governing
+ * permissions and limitations under the Licence.
+ */
+ 
+ /**
+  * \file: dates.c
+  */
+
+/* ToolboxLib Headers */
+
+#include "gadgets.h"
+
+/* Constants */
+
+/**
+ * A value indicating an unknown day.
+ */
+#define DATES_UNKNOWN_DAY (0)
+
+/**
+ * A value indicating an unknown year.
+ */
+
+#define DATES_UNKNOWN_YEAR (-1000000)
+
+/**
+ * Read a date from a date selector in a window. This can include up to three
+ * fields, for day, month and year.
+ *
+ * \param window	The Toolbox object ID of the window containing the date
+ *			selector.
+ * \param day_gadget	The component ID of the number range containing the day,
+ *			or 0 if not required.
+ * \param month_gadget	The component ID of the stringset containing the month,
+ *			or 0 if not required.
+ * \param year_gadget	The component ID of the number range containing the
+ *			year, or 0 if not required.
+ * \param *day		Pointer to a valiable to return the day, or NULL if not
+ *			required.
+ * \param *month	Pointer to a valiable to return the month, or NULL if
+ *			not required.
+ * \param *year		Pointer to a valiable to return the year, or NULL if not
+ *			required.
+ */
+
+void dates_read_date(ObjectId window, ComponentId day_gadget, ComponentId month_gadget, ComponentId year_gadget, int *day, int *month, int *year);
+
+/**
+ * Update a date selector in a window with a new value. This can include up to
+ * three fields, for day, month and year.
+ *
+ * If both day_gadget and month_gadget are supplied, the bounds of the day
+ * gadget will be updated to reflect the new month.
+ *
+ * \param window	The Toolbox object ID of the window containing the date
+ *			selector.
+ * \param day_gadget	The component ID of the number range containing the day,
+ *			or 0 if not required.
+ * \param month_gadget	The component ID of the stringset containing the month,
+ *			or 0 if not required.
+ * \param year_gadget	The component ID of the number range containing the
+ *			year, or 0 if not required.
+ * \param day		The new day to set.
+ * \param month		The new month to set.
+ * \param year		The new year to set.
+ */
+
+void dates_write_date(ObjectId window, ComponentId day_gadget, ComponentId month_gadget, ComponentId year_gadget, int day, int month, int year);
+
+/**
+ * Update a date selector in a window to the current date. This can include up
+ * to three fields, for day, month and year.
+ *
+ * \param window	The Toolbox object ID of the window containing the date
+ *			selector.
+ * \param day_gadget	The component ID of the number range containing the day,
+ *			or 0 if not required.
+ * \param month_gadget	The component ID of the stringset containing the month,
+ *			or 0 if not required.
+ * \param year_gadget	The component ID of the number range containing the
+ *			year, or 0 if not required.
+ */
+
+void dates_set_to_current(ObjectId window, ComponentId day_gadget, ComponentId month_gadget, ComponentId year_gadget);

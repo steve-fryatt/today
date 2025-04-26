@@ -59,9 +59,6 @@
 /* Include OSLib Headers. */
 
 #include "oslib/messagetrans.h"
-#include "oslib/os.h"
-#include "oslib/osword.h"
-#include "oslib/territory.h"
 
 /* Include SFLib Headers. */
 
@@ -72,6 +69,7 @@
 
 #include "main.h"
 
+#include "dates.h"
 #include "buildinfo.h"
 
 /* ==================================================================================================================
@@ -520,23 +518,6 @@ int adjustibar_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void
   return 1;
 }
 
-//This code finds the number in a number range (returning unknown if blank)
-int findnumber(ObjectId win,ComponentId ic,int unknown)
-{
-  int writeable,len,val;
-  char numstring[20];
-  numberrange_get_components(1,win,ic,&writeable,0,0,0);
-  writablefield_get_value(0,win,writeable,numstring,20,&len);
-  if (numstring[0]<32) {
-    val=unknown;
-  }
-  else
-  {
-    numberrange_get_value(0,win,ic,&val);
-  }
-  return val;
-}
-
 //This code is called when add event is selected in menu
 int openadd_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
@@ -546,12 +527,9 @@ int openadd_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *h
   toolbox_get_object_state(0,addwin.window,&state);
   if ((state&1)==0) {
     //Add window is not currently open so set date to date of main window
-    stringset_get_selected(1,scanwin.toolbar,1,&month);
-    month++;
-    day=findnumber(scanwin.toolbar,3,0);
-    if (day==0) {day=1;}
-    stringset_set_selected(0,addwin.window,1,monthnames[month]);
-    numberrange_set_value(0,addwin.window,3,day);
+    dates_read_date(scanwin.toolbar, 3, 1, 0, &day, &month, NULL);
+    if (day == DATES_UNKNOWN_DAY) {day=1;}
+    dates_write_date(addwin.window, 3, 1, 0, day, month, 0);
 
     //Clear all text in window
     for (loop=34;loop<=38;loop++) {
@@ -628,7 +606,7 @@ int saverecord(FILE *fileptr,REC_DATA *record,WIN_DATA *window)
   {
     sprintf(header+3,"%02d",record->day);
   }
-  if (record->year==UNKNOWN_YEAR) {
+  if (record->year==DATES_UNKNOWN_YEAR) {
     sprintf(header+5,"    ");
   }
   else
@@ -765,7 +743,7 @@ int loadheader(FILE *fileptr,REC_DATA *record,int listnum)
 
   //Check year
   if (header[5]==' ' && header[6]==' ' && header[7]==' ' && header[8]==' ') {
-    record->year=UNKNOWN_YEAR;
+    record->year=DATES_UNKNOWN_YEAR;
   }
   else
   {
@@ -883,8 +861,8 @@ int loadnextrecord(FILE *fileptr,WIN_DATA *window,int filenum,int maximum,int li
   if (tempfile==0) {parsestring(window->text+record->textoff);}
 
   //Check that the events have years and reminders do not
-  if (record->type==1 && record->year==UNKNOWN_YEAR) {record->type=2;}
-  if (record->type==2 && record->year!=UNKNOWN_YEAR) {record->type=1;}
+  if (record->type==1 && record->year==DATES_UNKNOWN_YEAR) {record->type=2;}
+  if (record->type==2 && record->year!=DATES_UNKNOWN_YEAR) {record->type=1;}
 
   //Set flag for own file
   record->fromown=(filenum==0);
@@ -1301,7 +1279,7 @@ int savealleventsinduporder(WIN_DATA *joindata,char *path,int filenum,int tempfi
   fprintf(fileptr,"*mmddyyyy Unknown Dates\n");
   fprintf(fileptr,"*-------- ------------------------------------------------------------\n");
   for(loop=0;loop<joindata->records;loop++) {
-    if (joindata->recorddata[loop].year==UNKNOWN_YEAR || joindata->recorddata[loop].month<0 || joindata->recorddata[loop].day<0) {
+    if (joindata->recorddata[loop].year==DATES_UNKNOWN_YEAR || joindata->recorddata[loop].month<0 || joindata->recorddata[loop].day<0) {
       saverecord(fileptr,&joindata->recorddata[loop],joindata);
       storedtable[loop]=1;
     }
@@ -1843,7 +1821,7 @@ int wildcardmatch(char *str1,char *str2,int casesen)
 int recinrange(REC_DATA *record,int year1,int month1,int day1,int year2,int month2,int day2)
 {
   //If year is unknown count as a match
-  if (record->year==UNKNOWN_YEAR) {return 1;}
+  if (record->year==DATES_UNKNOWN_YEAR) {return 1;}
   //If year is outside range, set as not match
   if (record->year<year1 || record->year>year2) {return 0;}
 
@@ -1974,8 +1952,7 @@ int editevent(WIN_DATA *win,int flags)
   if ((flags&2)!=0) {
     //Peform add
     radiobutton_get_state(0,win->window,0x1a,&state,&onradio);
-    stringset_get_selected(1,win->window,1,&month);
-    month++;
+    dates_read_date(win->window, 0, 1, 0, NULL, &month, NULL);
     if (state!=0) {
       //Save to month file
       nextfile=month;
@@ -2006,16 +1983,15 @@ int editevent(WIN_DATA *win,int flags)
     }
 
     //Read data for the event into memory block
-    win->recorddata[win->records].year=findnumber(win->window,19,UNKNOWN_YEAR);
+    dates_read_date(win->window, 3, 0, 19, &(win->recorddata[win->records].day), NULL, &(win->recorddata[win->records].year));
     win->recorddata[win->records].month=month;
-    win->recorddata[win->records].day=findnumber(win->window,3,0);
     stringset_get_selected(1,win->window,0x28,&win->recorddata[win->records].type);
     win->recorddata[win->records].type++;
     win->recorddata[win->records].fromown=(curfile==0);
 
     //Check that the events have years and reminders do not
-    if (win->recorddata[win->records].type==1 && win->recorddata[win->records].year==UNKNOWN_YEAR) {win->recorddata[win->records].type=2;}
-    if (win->recorddata[win->records].type==2 && win->recorddata[win->records].year!=UNKNOWN_YEAR) {win->recorddata[win->records].type=1;}
+    if (win->recorddata[win->records].type==1 && win->recorddata[win->records].year==DATES_UNKNOWN_YEAR) {win->recorddata[win->records].type=2;}
+    if (win->recorddata[win->records].type==2 && win->recorddata[win->records].year!=DATES_UNKNOWN_YEAR) {win->recorddata[win->records].type=1;}
 
     stringset_get_selected(1,win->window,29,&win->recorddata[win->records].code);
     win->recorddata[win->records].textoff=win->curoff;
@@ -2197,41 +2173,12 @@ int createrecwindow(char *winname,char *toolname,WIN_DATA *win)
 int stringchanged_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
   int month;
-  stringset_get_selected(1,id_block->self_id,id_block->self_component,&month);
-  numberrange_set_bounds(NumberRange_UpperBound,id_block->self_id,id_block->self_component+2,
-                         0,days_in_month[month+1],0,0);
+  dates_read_date(id_block->self_id, 0, id_block->self_component, 0, NULL, &month, NULL);
+  numberrange_set_bounds(NumberRange_UpperBound, id_block->self_id, id_block->self_component + 2,
+                         0, days_in_month[month], 0, 0);
   return 1;
 }
 
-
-/* ------------------------------------------------------------------------------------------------------------------ */
-
-/* Sets the date in the specified window and gadgets to today. */
-
-int set_to_current_date(ObjectId window, ComponentId day, ComponentId month, ComponentId year)
-{
-  oswordreadclock_utc_block time;
-  territory_ordinals        ordinals;
-
-
-  /* Read the current time from the system clock. */
-
-  time.op = oswordreadclock_OP_UTC;
-  oswordreadclock_utc (&time);
-  territory_convert_time_to_ordinals (territory_CURRENT, (const os_date_and_time *) &(time.utc), &ordinals);
-
-  /* Use the data to set up the window. */
-
-  stringset_set_selected(0, window, month, monthnames[ordinals.month]);
-  numberrange_set_bounds(NumberRange_UpperBound, window, day, 0, days_in_month[ordinals.month], 0, 0);
-  numberrange_set_value(0, window, day, ordinals.date);
-  if (year > 0)
-  {
-    numberrange_set_value(0, window, year, ordinals.year);
-  }
-
-  return (1);
-}
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 
@@ -2337,10 +2284,8 @@ int beginscan(void)
 
   _swi(Hourglass_On,0);
   //Read date to scan
-  stringset_get_selected(1,scanwin.toolbar,1,&scanmonth);
-  scanmonth++;
-  scanday=findnumber(scanwin.toolbar,3,0);
-  if (scanday==0) {return reporterror("e6",0);}
+  dates_read_date(scanwin.toolbar, 3, 1, 0, &scanday, &scanmonth, NULL);
+  if (scanday == DATES_UNKNOWN_DAY) {return reporterror("e6",0);}
   scandayofweek=finddayofweek(scanday,scanmonth);
 
   //Clear all of previous scan data
@@ -2508,14 +2453,8 @@ int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
   srchstring[offset++]=0;
 
   optionbutton_get_state(0,srchwin.toolbar,11,&srchrange);
-  numberrange_get_value(0,srchwin.toolbar,19,&srchyear1);
-  stringset_get_selected(1,srchwin.toolbar,15,&srchmonth1);
-  numberrange_get_value(0,srchwin.toolbar,17,&srchday1);
-  srchmonth1++;
-  numberrange_get_value(0,srchwin.toolbar,20,&srchyear2);
-  stringset_get_selected(1,srchwin.toolbar,16,&srchmonth2);
-  numberrange_get_value(0,srchwin.toolbar,18,&srchday2);
-  srchmonth2++;
+  dates_read_date(srchwin.toolbar, 17, 15, 19, &srchday1, &srchmonth1, &srchyear1);
+  dates_read_date(srchwin.toolbar, 18, 16, 20, &srchday2, &srchmonth2, &srchyear2);
 
   //Run through all files searching in them
   for (loop=0;loop<=12 && searchresult!=0;loop++) {
@@ -2578,7 +2517,7 @@ int scan_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *hand
 //This code is called when scan today is selected
 int scantoday_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
-  set_to_current_date(scanwin.toolbar,3,1,0);
+  dates_set_to_current(scanwin.toolbar,3,1,0);
   beginscan();
   return 1;
 }
@@ -2668,7 +2607,7 @@ int redrawlist(WIN_DATA *window)
         //Display year
         if (displayfield==1 || window->recorddata[loop].year!=window->recorddata[loop-1].year) {
           displayfield=1;
-          if (window->recorddata[loop].year==UNKNOWN_YEAR) {
+          if (window->recorddata[loop].year==DATES_UNKNOWN_YEAR) {
             sprintf(text,"????");
           }
           else
@@ -2785,12 +2724,12 @@ int deleterecord(int del,int keep)
     //and other record is more specific so copy type of other record
     sortwin[0]->recorddata[keep].type=sortwin[0]->recorddata[del].type;
   }
-  if (sortwin[0]->recorddata[keep].year==UNKNOWN_YEAR) {
+  if (sortwin[0]->recorddata[keep].year==DATES_UNKNOWN_YEAR) {
     //Copy year if kept record has unknown year
     sortwin[0]->recorddata[keep].year=sortwin[0]->recorddata[del].year;
     //Check that the events have years and reminders do not
-    if (sortwin[0]->recorddata[keep].type==1 && sortwin[0]->recorddata[keep].year==UNKNOWN_YEAR) {sortwin[0]->recorddata[keep].type=2;}
-    if (sortwin[0]->recorddata[keep].type==2 && sortwin[0]->recorddata[keep].year!=UNKNOWN_YEAR) {sortwin[0]->recorddata[keep].type=1;}
+    if (sortwin[0]->recorddata[keep].type==1 && sortwin[0]->recorddata[keep].year==DATES_UNKNOWN_YEAR) {sortwin[0]->recorddata[keep].type=2;}
+    if (sortwin[0]->recorddata[keep].type==2 && sortwin[0]->recorddata[keep].year!=DATES_UNKNOWN_YEAR) {sortwin[0]->recorddata[keep].type=1;}
   }
 
 //  memmove(&sortwin[0]->recorddata[del],&sortwin[0]->recorddata[del+1],(sortwin[0]->records-1-del)*sizeof(REC_DATA));
@@ -3156,7 +3095,7 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
 
     //Remove all duplicates
     for (loop=joindata.records-1;loop>0;loop--) {
-      if (joindata.recorddata[loop].year==UNKNOWN_YEAR) {
+      if (joindata.recorddata[loop].year==DATES_UNKNOWN_YEAR) {
         //Record has an unknown year so check against all events
         loop2=joindata.records-1;
         ignoreyears=1;
@@ -3412,7 +3351,7 @@ int savefile_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
       displayfield=(loop==0);
       if (displayfield==1 || window->recorddata[loop].year!=window->recorddata[loop-1].year) {
         displayfield=1;
-        if (window->recorddata[loop].year==UNKNOWN_YEAR) {
+        if (window->recorddata[loop].year==DATES_UNKNOWN_YEAR) {
           fprintf(fileptr," ???? ");
         }
         else
@@ -3527,7 +3466,7 @@ int savefile_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
     }
     fputc(10,fileptr);
     for (loop=0;loop<window->records;loop++) {
-      if (window->recorddata[loop].year==UNKNOWN_YEAR) {
+      if (window->recorddata[loop].year==DATES_UNKNOWN_YEAR) {
         fprintf(fileptr,"\"????\",");
       }
       else
@@ -3613,7 +3552,7 @@ int object_created_event(int event_code, ToolboxEvent *event, IdBlock *id_block,
 int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *handle)
 {
   int block[25],row,row2,loop,offset=0,offset2,offset3,match=0;
-  int textoff,left,right,termchar,nextchar,writeable,month;
+  int textoff,left,right,termchar,nextchar,month;
   REC_DATA *record=NULL;
   WIN_DATA *butwin;
   char *string,filename[256];
@@ -3641,8 +3580,7 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
         //Open an edit window for the own and month files
         sprintf(filename,"Filer_Run %s.TodayData.%s",todaypaths[0],monthfiles[0]);
         _swi(Wimp_StartTask,_IN(0),filename);
-        stringset_get_selected(1,scanwin.toolbar,1,&month);
-        month++;
+        dates_read_date(scanwin.toolbar, 0, 1, 0, NULL, &month, NULL);
         sprintf(filename,"Filer_Run %s.TodayData.%s",todaypaths[0],monthfiles[month]);
         _swi(Wimp_StartTask,_IN(0),filename);
     }
@@ -3689,29 +3627,7 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
           editwin.curoff=offset;
 
           //Now set up the gadgets
-          if (record->year==UNKNOWN_YEAR) {
-            numberrange_get_components(1,editwin.window,19,&writeable,0,0,0);
-            writablefield_set_value(0,editwin.window,writeable,"");
-          }
-          else
-          {
-            numberrange_set_value(0,editwin.window,19,record->year);
-          }
-          if (record->month<=0) {
-            stringset_set_selected(0,editwin.window,1,monthnames[1]);
-          }
-          else
-          {
-            stringset_set_selected(0,editwin.window,1,monthnames[record->month]);
-          }
-          if (record->day<=0) {
-            numberrange_get_components(1,editwin.window,3,&writeable,0,0,0);
-            writablefield_set_value(0,editwin.window,writeable,"");
-          }
-          else
-          {
-            numberrange_set_value(0,editwin.window,3,record->day);
-          }
+          dates_write_date(editwin.window, 3, 1, 19, record->day, record->month, record->year);
           stringset_set_selected(0,editwin.window,0x28,eventlists[0][record->type].str+2);
           stringset_set_selected(1,editwin.window,29,(char *)(record->code));
           radiobutton_set_state(0,editwin.window,0x1a,1-record->fromown);
@@ -3746,8 +3662,7 @@ int button_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
           if (id_block->self_id==srchwin.window) {
             //Scan date of record (if month/day defined)
             if (record!=NULL && record->month>0 && record->day>0) {
-              stringset_set_selected(0,scanwin.toolbar,1,monthnames[record->month]);
-              numberrange_set_value(0,scanwin.toolbar,3,record->day);
+              dates_write_date(scanwin.toolbar, 3, 1, 0, record->day, record->month, 0);
               beginscan();
               toolbox_show_object(0,scanwin.window,0,0,iconbar_id,iconbar_component);
             }
@@ -3834,8 +3749,8 @@ int setupwindows(void)
   stringset_set_selected(1,addwin.window,0x28,0);
   menu_remove_entry(0,typemenu,102);
 
-  set_to_current_date(scanwin.toolbar,3,1,0);
-  set_to_current_date(addwin.window,3,1,19);
+  dates_set_to_current(scanwin.toolbar,3,1,0);
+  dates_set_to_current(addwin.window,3,1,19);
   beginscan();
   justifywindow(&srchwin,0);
 
