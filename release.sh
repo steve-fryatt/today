@@ -12,13 +12,16 @@ PACKAGELOC="Miscellaneous"
 
 OUTDIR="Build"
 PKGDIR="Package"
+MANUAL="Manual"
 PKGTREEDIR="Apps"
 PKGCTRLDIR="RiscPkg"
 
 # The name of the application folder, Licence and ReadMe files.
 
 APP="!Today"
+HELP="!Help"
 LICENCE="Licence"
+READMEHDR="Header"
 README="ReadMe"
 PKGCTRL="Control"
 PKGCPY="Copyright"
@@ -85,6 +88,11 @@ echo "Releasing as version $VERSION and saving to $ZIPFILE"
 if [ "$PACKAGE" != "" ]; then
 	echo "Packaging as $PKG_VERSION and saving to $PKGZIPFILE"
 fi
+
+# Copy across the static files.
+
+cp -a "${LICENCE}" "${OUTDIR}/${LICENCE}"
+${SFTOOLS_BIN}/textmerge "${OUTDIR}/${README}" "${OUTDIR}/${APP}/${HELP}"  "${MANUAL}/${READMEHDR}" 5
 
 # Assemble the standard distribution archive
 

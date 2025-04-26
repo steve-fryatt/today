@@ -21,12 +21,6 @@ amu all THROWBACK=-throwback
 
 Do XMLMan Manual.Source/xml -text Build.!Today.!Help  -define "date=<Today$BuildDate>" -define "version=<Today$BuildVersion>"
 
-Do TextMerge Build.ReadMe Build.!Today.!Help Manual.Header 5
-
-| Copy the Licence
-
-Copy Licence Build.Licence A~C~CF~L~N~P~QR~S~TV
-
 | Tidy up.
 
 Unset Today$BuildVersion
