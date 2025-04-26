@@ -22,6 +22,16 @@ You will need to have two utilities - BuildInfo and XMLMan - installed on your R
 With this setup complete and the DDE having been seen, running the Mk TaskObey file in the project folder should build the documentation and !RunImage file within the !Today application.
 
 
+Releasing
+---------
+
+Creating release and package archives can be done from a Linux system, using the [SFTools build environment](https://github.com/steve-fryatt). It will be necessary to have suitable Linux system with a working installation of the [GCCSDK](http://www.riscos.info/index.php/GCCSDK) to be able to make use of this.
+
+From the top-level folder of the project, run the `release.sh` to create a distribution archive (no source) and RiscPkg package in the folder within which the project folder is located. By default the output of `git describe` is used to version the build, but a specific version can be applied by supplying the `--version` parameter -- for example
+
+	./release.sh --version=1.23
+
+
 Licence
 -------
 
