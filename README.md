@@ -15,7 +15,7 @@ Building
 
 Today needs to be built using the [Desktop Development Environment](https://www.riscosopen.org/content/sales/dde) from RISC OS Open.
 
-It can be checked out from the GitHub repository using the Git client from RISC OS Open.
+It can be checked out from the GitHub repository directly on to a RISC OS system using the Git client from RISC OS Open.
 
 You will need to have two utilities - BuildInfo and XMLMan - installed on your Run Path for the build to work. These can be obtained from <https://www.stevefryatt.org.uk/risc-os/programming-tools>, and the easiest way to ensure that they are found is to install them into Boot:Library.
 
@@ -27,7 +27,7 @@ Releasing
 
 Creating release and package archives can be done from a Linux system, using the [SFTools build environment](https://github.com/steve-fryatt). It will be necessary to have suitable Linux system with a working installation of the [GCCSDK](http://www.riscos.info/index.php/GCCSDK) to be able to make use of this.
 
-From the top-level folder of the project, run the `release.sh` to create a distribution archive (no source) and RiscPkg package in the folder within which the project folder is located. By default the output of `git describe` is used to version the build, but a specific version can be applied by supplying the `--version` parameter -- for example
+From the top-level folder of the project, run the `release.sh` script to create a distribution archive (with no source) and RiscPkg package in the folder within which the project folder is located. By default the output of `git describe` is used to version the build, but a specific version can be applied by supplying the `--version` parameter -- for example
 
 	./release.sh --version=1.23
 
