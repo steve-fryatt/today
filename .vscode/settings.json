@@ -12,6 +12,7 @@
 	],
 	"files.associations": {
 		"*.csv": "csv (whitespace)",
-		"main": "c"
+		"main": "c",
+		"dates": "c"
 	}
 }
