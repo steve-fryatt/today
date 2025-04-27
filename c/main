@@ -72,6 +72,8 @@
 #include "dates.h"
 #include "buildinfo.h"
 
+#define UNUSED(x) ((void)(x))
+
 /* Externed Global Variables. */
 
 /**
@@ -507,8 +509,11 @@ int reporterror(char *errortoken,char *str1)
 }
 
 //This code is called by a Wimp_Quit message, it forces an immediate quit
-int quit_message(WimpMessage *message,void *handle)
+int quit_message(WimpMessage *message, void *handle)
 {
+  UNUSED(message);
+  UNUSED(handle);
+
   _swi(MessageTrans_CloseFile,_IN(0),&messages);
   exit(0);
   return 1;
@@ -517,6 +522,11 @@ int quit_message(WimpMessage *message,void *handle)
 //This code is called when the iconbar is selected
 int selectibar_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   toolbox_show_object(0,scanwin.window,0,0,iconbar_id,iconbar_component);
   gadget_set_focus(0,scanwin.toolbar,3);
   return 1;
@@ -525,6 +535,11 @@ int selectibar_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void
 //This code is called when the iconbar is adjusted
 int adjustibar_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   toolbox_show_object(0,srchwin.window,0,0,iconbar_id,iconbar_component);
   gadget_set_focus(0,srchwin.toolbar,1);
   return 1;
@@ -533,7 +548,12 @@ int adjustibar_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void
 //This code is called when add event is selected in menu
 int openadd_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
-  int day,month,loop;
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
+  int day, month, loop;
   unsigned int state;
 
   toolbox_get_object_state(0,addwin.window,&state);
@@ -555,6 +575,11 @@ int openadd_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *h
 //This code is called when clear text is selected
 int cleartext_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   int loop;
   for (loop=34;loop<=38;loop++) {
     writablefield_set_value(0,addwin.window,loop,"");
@@ -2070,6 +2095,11 @@ int editevent(WIN_DATA *win,int flags)
 //This code is called when add event is selected
 int addnew_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   int loop,block[10],code;
   ObjectId tool_win;
   ComponentId tool_icon;
@@ -2097,6 +2127,11 @@ int addnew_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
 //This code is called when delete is selected
 int delete_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   _kernel_oserror error;
 
   //First check if delete is really wanted
@@ -2113,15 +2148,24 @@ int delete_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
 //This code is called when edit is selected
 int edit_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   //Call routine to delete event and add a new event
-  editevent(&editwin,3);
-  toolbox_hide_object(0,editwin.window);
+  editevent(&editwin, 3);
+  toolbox_hide_object(0, editwin.window);
   return 1;
 }
 
 //This code is called when an item in the type list is selected
 int altertypes_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(handle);
+
   int tick;
   menu_get_tick(0,id_block->self_id,id_block->self_component,&tick);
   tick=1-(tick==1);
@@ -2132,6 +2176,11 @@ int altertypes_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void
 //This code is called when quit is selected on the menu
 int menuquit_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   _swi(MessageTrans_CloseFile,_IN(0),&messages);
   exit(0);
   return 1;
@@ -2140,6 +2189,11 @@ int menuquit_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
 //This code is called when help is selected on the menu
 int menuhelp_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   _swi(OS_CLI,_IN(0),"%Filer_Run <Today$Dir>.!Help");
   return 1;
 }
@@ -2184,6 +2238,10 @@ int createrecwindow(char *winname,char *toolname,WIN_DATA *win)
 //This code is called when the month is changed in the scan window
 int stringchanged_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(handle);
+
   int month;
   dates_read_date(id_block->self_id, 0, id_block->self_component, 0, NULL, &month, NULL);
   numberrange_set_bounds(NumberRange_UpperBound, id_block->self_id, id_block->self_component + 2,
@@ -2229,6 +2287,8 @@ int scanfile(int filenum)
 //This code is called when a file is dragged to !Today
 int draggingjoinfile_message(WimpMessage *message,void *handle)
 {
+  UNUSED(handle);
+
   ObjectId self_id;
   ComponentId self_component;
   char filename[256];
@@ -2256,6 +2316,9 @@ int draggingjoinfile_message(WimpMessage *message,void *handle)
 //This code is called when font is changed
 int fontchange_message(WimpMessage *message,void *handle)
 {
+  UNUSED(message);
+  UNUSED(handle);
+
   findfontwidths();
   justifywindow(&scanwin,1);
   justifywindow(&srchwin,1);
@@ -2265,6 +2328,9 @@ int fontchange_message(WimpMessage *message,void *handle)
 //This code is called when mode is changed
 int modechange_message(WimpMessage *message,void *handle)
 {
+  UNUSED(message);
+  UNUSED(handle);
+
   findfontwidths();
   //fixtoolbar(&scanwin,"ScanTool");
   //fixtoolbar(&srchwin,"SrchTool");
@@ -2372,6 +2438,11 @@ static int check_valid_set(char *str)
 //This code is called when search is selected
 int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   int loop,searchresult=1,recresult=1,state,len;
   int offset=0,offset2=0,offset3=0,nextchar,char2;
   char text[12],filename[256],newsrch[64];
@@ -2522,6 +2593,11 @@ int search_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *ha
 //This code is called when scan is selected
 int scan_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   beginscan();
   return 1;
 }
@@ -2529,7 +2605,12 @@ int scan_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *hand
 //This code is called when scan today is selected
 int scantoday_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
-  dates_set_to_current(scanwin.toolbar,3,1,0);
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
+  dates_set_to_current(scanwin.toolbar, 3, 1, 0);
   beginscan();
   return 1;
 }
@@ -2697,6 +2778,10 @@ int redrawlist(WIN_DATA *window)
 //Redraws the list of events in the windows
 int redraw_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(handle);
+
   if (id_block->self_id==scanwin.window) {redrawlist(&scanwin);}
   if (id_block->self_id==srchwin.window) {redrawlist(&srchwin);}
   return 1;
@@ -2705,6 +2790,10 @@ int redraw_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *h
 //Alters state of highlight flag
 int highlight_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(handle);
+
   BBox extent;
   highlightstate^=1;
   menu_set_tick(0,id_block->self_id,id_block->self_component,highlightstate);
@@ -2720,6 +2809,10 @@ int highlight_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void 
 //Sets shaded items in save menu
 int openingsave_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(handle);
+
   menu_set_fade(0,id_block->self_id,0,scanwin.records==0);
   menu_set_fade(0,id_block->self_id,1,scanwin.records==0);
   menu_set_fade(0,id_block->self_id,2,srchwin.records==0);
@@ -2889,6 +2982,10 @@ static int savelisttomessages(FILE *fileptr2,int messlinetype)
 //Joins and sorts data
 int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(handle);
+  UNUSED(id_block);
+  UNUSED(event_code);
+
   int loadedevents=0,savedevents=0,possibleduplicates=0,messlinetype;
   int filenum,loop,loop2=0,loop3,len,result,listnum,listnum2,namesmatch;
   int oldnumoftypes,letter,state,selected,recresult,pathnum;
@@ -3298,6 +3395,10 @@ int joindata_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
 //Called when opening saveas window
 int showingsaveas_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(handle);
+  UNUSED(event_code);
+  UNUSED(event);
+
   int size;
   //Guess size of file
   if (id_block->parent_component<2) {
@@ -3314,6 +3415,9 @@ int showingsaveas_event(int event_code, ToolboxEvent *event, IdBlock *id_block,v
 //Called when save done
 int savefile_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(handle);
+  UNUSED(event_code);
+
   FILE *fileptr;
   WIN_DATA *window;
   int loop,loop2,offset,offset2,displayfield;
@@ -3538,6 +3642,9 @@ int savefile_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *
 
 int object_created_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(handle);
+  UNUSED(event_code);
+
   char buffer[256];
 
   if (strcmp (event->data.bytes, "Iconbar") == 0)
@@ -3789,26 +3896,43 @@ int setupwindows(void)
 //Handles selection of all in type menu
 int selectall_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(handle);
+
   int loop;
-  for (loop=1;loop<lenofeventlists[0];loop++) {
-    menu_set_tick(0,id_block->self_id,loop,1);
+
+  for (loop = 1; loop < lenofeventlists[0]; loop++) {
+    menu_set_tick(0, id_block->self_id, loop, 1);
   }
+
   return 1;
 }
 
 //Handles selection of none in type menu
 int selectnone_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(handle);
+
   int loop;
-  for (loop=1;loop<lenofeventlists[0];loop++) {
-    menu_set_tick(0,id_block->self_id,loop,0);
+
+  for (loop = 1; loop < lenofeventlists[0]; loop++) {
+    menu_set_tick(0, id_block->self_id, loop, 0);
   }
+
   return 1;
 }
 
 //Saves the options to a file
 int saveoptions_event(int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   int state,on;
   char path[256];
   FILE *optfile;
@@ -3956,6 +4080,11 @@ int loadlists(int numoffiles)
 //Handles idle events, called once every minute
 int idle_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *handle)
 {
+  UNUSED(event_code);
+  UNUSED(event);
+  UNUSED(id_block);
+  UNUSED(handle);
+
   int old_day, old_month, new_day, new_month, current_day, current_month;
 
   if (dates_test_for_date_change(&old_day, &old_month, &new_day, &new_month) == FALSE)
@@ -3973,7 +4102,7 @@ int idle_event(int event_code, WimpPollBlock *event, IdBlock *id_block,void *han
   return 1;
 }
 
-int main(int argc,char *argv[])
+int main(void)
 {
     //Setup the list of wimp messages to receive
     static int wimp_messages[]={

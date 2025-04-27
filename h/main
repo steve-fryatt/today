@@ -139,7 +139,7 @@ extern int loadheader                (FILE *fileptr,REC_DATA *record,int listnum
 extern int loadlist                  (int num,int numoffiles);
 extern int loadlists                 (int numoffiles);
 extern int loadnextrecord            (FILE *fileptr,WIN_DATA *window,int filenum,int maximum,int listnum,int tempfile);
-extern int main                      (int argc,char *argv[]);
+extern int main                      (void);
 extern int makelistofwords           (REC_DATA *record1,REC_DATA *record2);
 extern int makeroomfordata           (WIN_DATA *window,int maximum);
 extern int menuhelp_event            (int event_code, ToolboxEvent *event, IdBlock *id_block,void *handle);
