@@ -1,0 +1,21 @@
+{
+    "configurations": [
+        {
+            "name": "RISC OS",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/steve/gccsdk/env/include/",
+                "/home/steve/gccsdk/extralibs/dde/",
+                "/home/steve/gccsdk/extralibs/tboxlib/"
+            ],
+            "defines": [
+                "BUILD_DATE=\"1 Jan 1970\"",
+                "BUILD_VERSION=\"0.00\""
+            ],
+            "compilerPath": "/home/steve/gccsdk/cross/arm-unknown-riscos/bin/gcc",
+            "cStandard": "gnu99",
+            "cppStandard": "gnu++14"
+        }
+    ],
+    "version": 4
+}
