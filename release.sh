@@ -70,12 +70,12 @@ if [ "$VERSION" == "" ]; then
 		PKG_VERSION="$($SFTOOLS_BIN/getpackagerev --index unstable --package $PACKAGE --revision $VERSION)"
 	fi
 else
-	# Remove any dots from the version number.
-	VERSION="$(echo $VERSION | tr -d '.')"
-
 	if [ "$PACKAGE" != "" ]; then
 		PKG_VERSION="$($SFTOOLS_BIN/getpackagerev --index stable --package $PACKAGE --revision $VERSION)"
 	fi
+
+	# Remove any dots from the version number.
+	VERSION="$(echo $VERSION | tr -d '.')"
 fi
 
 # Work out the target filenames.
