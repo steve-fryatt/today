@@ -74,6 +74,10 @@
 
 #define UNUSED(x) ((void)(x))
 
+/* The minimum size, in OS units, that we will set the index or search windows to. */
+
+#define MINIMUM_WINDOW_SIZE 120
+
 /* Externed Global Variables. */
 
 /**
@@ -1552,9 +1556,11 @@ int justifywindow(WIN_DATA *window,int reopen)
   //Set extent of window
   extent.xmin=extent.ymax=0;
   extent.xmax=windowwidth;
-  extent.ymin=-window->toolbarheight;
+  extent.ymin=-window->toolbarheight - MINIMUM_WINDOW_SIZE;
   //window_set_extent(0,window->toolbar,&extent);
-  if (lines>0) {extent.ymin-=8+40*lines;}
+  if (lines>0) {
+    extent.ymin = -(window->toolbarheight + 8+40*lines);
+  }
   window_set_extent(0,window->window,&extent);
 
   //Redraw the window if open
