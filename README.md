@@ -29,7 +29,7 @@ Creating release and package archives can be done from a Linux system, using the
 
 From the top-level folder of the project, run the `release.sh` script to create a distribution archive (with no source) and RiscPkg package in the folder within which the project folder is located. By default the output of `git describe` is used to version the build, but a specific version can be applied by supplying the `--version` parameter -- for example
 
-	./release.sh --version=1.23
+	./release.sh --version 1.23
 
 
 Licence
