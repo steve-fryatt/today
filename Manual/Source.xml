@@ -47,7 +47,7 @@
 
 <p>This new program has all of these features. The program has been completely revised since earlier versions, it is now quicker and conforms better to the current Acorn style (by using the Toolbox). In order to run it you must install the Toolbox modules onto your harddisc.</p>
 
-<p><cite>Today</cite> is designed to work with RISC&nbsp;OS&nbsp;3.10 or later. It is 26/32-bit neutral, and should therefore run on all hardware systems as long as the 32-bit Shared C Library is installed. If required, this can be found on the Castle website at <link external="true" href="http://www.iyonix.com/32bit/system.shtml"/>.</p>
+<p><cite>Today</cite> is designed to work with RISC&nbsp;OS&nbsp;3.10 or later. It is 26/32-bit neutral, and should therefore run on all hardware systems as long as the 32-bit Shared C Library is installed. If required, this can be found in the System Resources on RISC&nbsp;OS Open Ltd&rsquo;s website at <link href="https://www.riscosopen.org/content/downloads/common"/>.</p>
 
 <callout type="important">
 <p>If you are upgrading to this version from an older version and you wish to include data from your old copy, you <strong>must</strong> join the data by running this version of the program and using the Join option. This is because of some of the event type codes have changed (most significantly Event is now E).</p>
@@ -332,7 +332,7 @@
 <li><p>DAY-OF-WEEK DIGIT where 1=Sunday ... 7=Saturday. This will cause the message to display only if the date falls on a certain day of the week.  Look in the November file for US voting day examples.</p></li>
 </ul>
 </li>
-            
+
 <li><title>Rest</title>
 
 <p>Text followed by a newline character.</p>
@@ -479,12 +479,14 @@
 </section>
 
 <section>
-<title>Test Build</title>
+<title>3.20 (5 Oct 2025)</title>
 
 <ul compact="true">
+<li><p>Built with a toolchain known to be ARMv7 compatible.</p></li>
 <li><p>Add a <menu>Help...</menu> entry into the main and iconbar menus.</p></li>
 <li><p>Update the current scan window date when the system clock changes day, so long as the window was previously on the current day.</p></li>
 <li><p>Correctly set the upper bound for the day of the month when opening the event window.</p></li>
+<li><p>Apply a minimum window size when setting the extent of the scan and search windows, to avoid the search results being hidden.</p></li>
 </ul>
 </section>
 </chapter>
