@@ -64,37 +64,37 @@
 
 <dl>
 <li>
-<title><menu>Info</menu></title>
+<title><menu><item>Info</item></menu></title>
 
 <p>Gives information on Today.</p></li>
 
 <li>
-<title><menu>Help...</menu></title>
+<title><menu><item>Help...</item></menu></title>
 
 <p>Opens this documentation in a text editor.</p></li>
 
 <li>
-<title><menu>Save</menu></title>
+<title><menu><item>Save</item></menu></title>
 
 <p>Allows you to save the contents of the scan window and the search window as text files.</p></li>
 
 <li>
-<title><menu>Open window</menu></title>
+<title><menu><item>Open window</item></menu></title>
 
 <p>Allows you to open the windows used for Today, these windows will be discussed in the relevant sections.</p></li>
 
 <li>
-<title><menu>Highlight own data</menu></title>
+<title><menu><item>Highlight own data</item></menu></title>
 
 <p>If selected, all events stored in the 'Own' data files will be highlighted by drawing in red.</p></li>
 
 <li>
-<title><menu>Save Options</menu></title>
+<title><menu><item>Save Options</item></menu></title>
 
 <p>Saves the current state of the Highlight own data menu item and the destination file for new events in the add window.</p></li>
 
 <li>
-<title><menu>Quit</menu></title>
+<title><menu><item>Quit</item></menu></title>
 
 <p>Select to Quit the program.</p></li>
 </dl>
@@ -483,7 +483,7 @@
 
 <ul compact="true">
 <li><p>Built with a toolchain known to be ARMv7 compatible.</p></li>
-<li><p>Add a <menu>Help...</menu> entry into the main and iconbar menus.</p></li>
+<li><p>Add a <menu><item>Help...</item></menu> entry into the main and iconbar menus.</p></li>
 <li><p>Update the current scan window date when the system clock changes day, so long as the window was previously on the current day.</p></li>
 <li><p>Correctly set the upper bound for the day of the month when opening the event window.</p></li>
 <li><p>Apply a minimum window size when setting the extent of the scan and search windows, to avoid the search results being hidden.</p></li>
